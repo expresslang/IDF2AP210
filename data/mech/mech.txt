@@ -1,0 +1,4 @@
+
+This board is a sample board provided with the IDF v2 specification.
+It contains several mechanical parts and has electrical parts on both
+sides of the board.

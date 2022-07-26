@@ -1,0 +1,806 @@
+-- -*- Mode: ExpressX -*-
+
+SCHEMA_MAP erm210_2_aim210;
+  REFERENCE FROM erm : ap210arm_extended                                     AS SOURCE;
+  REFERENCE FROM aim : electronic_assembly_interconnect_and_packaging_design AS TARGET;
+
+-- **********************************************************************
+-- ERM entities to be translated:
+--  +  assembly_component_2d_shape
+--  +  assembly_module
+--  +  assembly_module_usage_view
+--  +  cartesian_coordinate_system
+--  o  cartesian_point
+--  o  cartesian_transformation_operator_2d
+--  o  circular_area
+--  +  component_2d_location
+--  +  component_assembly_2d_position
+--  +  component_part_2d_geometric_representation_relationship
+--  +  date_and_time
+--  +  ee_approval
+--  +  ee_document_identifier
+--  +  ee_product
+--  +  ee_product_version
+--  +  ee_requirement_occurrence
+--  +  ee_specification
+--  o  ee_text
+--  +  functional_unit_usage_view
+--  +  interconnect_module_component
+--  +  interconnect_module_edge_surface
+--  +  interconnect_module_usage_view
+--  +  length_data_element
+--  +  next_higher_assembly_relationship
+--  +  organization
+--  o  orientation
+--  +  package
+--  +  packaged_component
+--  +  packaged_part
+--  +  part_feature
+--  +  person
+--  o  person_and_organization
+--  +  physical_unit_planar_shape
+--  +  planar_projected_shape
+--  +  polyline
+--  +  registered_style
+--  -  requirement_allocation
+--  +  requirement_definition
+--  +  seating_plane
+--  +  security_classification
+--  +  usage_concept_usage_relationship
+
+(* Accumulate changes here.  When a new STEP file goes out put these comments
+   in the body of the e-mail.
+
+  o  Filled in one attribute of mapped_item from UCUR
+*)
+
+MAP geometric_representation_item
+  AS   gri : aim.geometric_representation_item;
+  FROM si  : erm.shape_item;
+SELECT
+  gri.name := 'shape_item';
+END_MAP; -- geometric_representation_item
+
+MAP assembly_component_2d_shape
+  AS   sr : aim.geometrically_bounded_2d_wireframe_representation;
+  FROM ac2s : erm.assembly_component_2d_shape;
+   --ac2s.geometric_context: cartesian_coordinate_system;
+   --ac2s.element: OPTIONAL SET [1:?] OF shape_item;
+   --ac2s.shape_characterized_component: SET [1:?] OF assembly_component;
+SELECT
+-- DERIVE id: identifier;
+-- DERIVE description: text;
+  sr.name := 'ac2s -- planar projected shape';
+--  sr.items: SET [1:?] OF representation_item;
+  sr.items := IF NOT(EXISTS(ac2s.element))
+	      THEN ?
+	      ELSE FOR EACH elem in ac2s.element
+		   RETURN gri@geometric_representation_item(elem)
+	      END_IF;
+  sr.context_of_items := gc@cartesian_coordinate_system(ac2s.geometric_context);
+END_MAP; -- assembly_component_2d_shape
+
+MAP ac2s__shape_characterized_component
+  AS pdr : aim.property_definition_representation;
+  FROM ac2s : erm.assembly_component_2d_shape;
+       ac : erm.assembly_component;
+  WHERE ac IN ac2s.shape_characterized_component;
+SELECT
+  pdr.definition := pds@assembly_component(ac);
+  pdr.used_representation := sr@assembly_component_2d_shape(ac2s);
+-- DERIVE
+--   description: text := get_description_value(SELF);
+--   name: label := get_name_value(SELF);
+END_MAP; -- ac2s__shape_characterized_component
+
+MAP ee_product_definition
+  AS   pd  : aim.product_definition;
+  FROM epd : erm.ee_product_definition;
+   --epd.creator: SET [1:?] OF person_organization;
+   --epd.product_definition_id: ee_name;
+   --epd.security_code: security_classification;
+   --epd.context_description: ee_text;
+   --epd.version: ee_product_version;
+   --epd.product_definition_approval: ee_approval;
+   --epd.creation_date: date_and_time;
+   --epd.documentation: OPTIONAL SET [1:?] OF ee_document;
+   --epd.cad_filename: OPTIONAL ee_name;
+   --epd.discipline_id: ee_name;
+SELECT
+--  pd.id: identifier;
+  pd.formation := pdf@ee_product_version(epd.version);
+END_MAP; -- product_definition
+
+MAP physical_unit
+  AS  pd  : aim.physical_unit;
+  SUBTYPE OF (ee_product_definition);
+  WHERE 'AP210ARM_EXTENDED.PHYSICAL_UNIT' IN TYPEOF(epd);
+   --pu.analytical_physical_unit_representation: OPTIONAL SET [1:?] OF analytical_representation;
+   --pu.unit_technology: OPTIONAL technology;
+   --pu.physical_device_characteristic: OPTIONAL SET [1:?] OF characteristic;
+   --pu.physical_device_coordinated_characteristic: OPTIONAL SET [1:?] OF coordinated_characteristic;
+   --pu.design_requirement: OPTIONAL SET [1:?] OF ee_requirement_occurrence;
+SELECT
+  pd.id := '';
+--  pds.name := '';
+  --pds.description: OPTIONAL label;
+--  pds.definition := pd;
+-- DERIVE
+--   pds\property_definition.id: identifier := get_id_value(SELF);
+END_MAP; -- physical_unit
+
+MAP physical_unit_design_view
+  AS  pd  : aim.physical_unit;
+      pds : aim.product_definition_shape;
+  SUBTYPE OF (physical_unit);
+  WHERE 'AP210ARM_EXTENDED.PHYSICAL_UNIT_DESIGN_VIEW' IN TYPEOF(epd);
+SELECT
+  pd.description := 'physical unit design view';
+  pd.frame_of_reference := pdc@product_definition_context('physical design');
+
+  pds.definition := pd;
+END_MAP; -- physical_unit_design_view
+
+MAP assembly_module
+  AS  pd  : aim.physical_unit;
+      pds : aim.product_definition_shape;
+      na  : aim.name_attribute;
+  SUBTYPE OF (physical_unit_design_view);
+  WHERE 'AP210ARM_EXTENDED.ASSEMBLY_MODULE' IN TYPEOF(epd);
+   --pudv.usage_view: OPTIONAL physical_unit_usage_view;
+SELECT
+  na.attribute_value := 'assembly module';
+  na.named_item := pd;
+
+  pd.description := 'assembly module'; -- temporary
+END_MAP; -- assembly_module
+
+MAP physical_unit_usage_view
+  AS  pd  : aim.physical_unit;
+  SUBTYPE OF (physical_unit);
+  WHERE 'AP210ARM_EXTENDED.PHYSICAL_UNIT_USAGE_VIEW' IN TYPEOF(epd);
+SELECT
+  pd.description := 'physical unit usage view';
+  pd.frame_of_reference := pdc@product_definition_context('physical design usage');
+END_MAP; -- physical_unit_usage_view
+
+MAP assembly_module_usage_view
+  AS  pd  : aim.physical_unit;
+      pds : aim.product_definition_shape;
+      na  : aim.name_attribute;
+  SUBTYPE OF (physical_unit_usage_view);
+  WHERE 'AP210ARM_EXTENDED.ASSEMBLY_MODULE_USAGE_VIEW' IN TYPEOF(epd);
+SELECT
+  na.attribute_value := 'assembly module';
+  na.named_item := pd;
+
+  pds.definition := pd;
+
+  pd.description := 'assembly module usage view';
+END_MAP; -- assembly_module_usage_view
+
+MAP cartesian_coordinate_system
+  AS   gc  : aim.geometric_representation_context
+           & aim.global_unit_assigned_context
+           & aim.global_uncertainty_assigned_context;
+  FROM ccs : erm.cartesian_coordinate_system;
+  -- ccs.length_unit_of_measure_prefix: string;
+  -- ccs.length_unit_of_measure: string;
+  -- ccs.length_dynamic_range: OPTIONAL integer;
+  -- ccs.dimensionality: two_or_three_dimensional;
+  -- ccs.angle_unit_of_measure: degree_or_radian;
+  -- ccs.angle_unit_of_measure_prefix: string;
+  -- ccs.length_uncertainty: length_data_element;
+  -- ccs.angular_uncertainty: OPTIONAL angle_data_element;
+SELECT
+--  gc.context_identifier: identifier;
+--  gc.context_type: text;
+  gc.coordinate_space_dimension :=
+	CASE ccs.dimensionality OF
+	  erm.two_or_three_dimensional.two_dimensional : 2;
+	  erm.two_or_three_dimensional.three_dimensional : 3;
+	END_CASE;
+--  gc.units: SET [1:?] OF unit;
+--  gc.uncertainty: SET [1:?] OF uncertainty_measure_with_unit;
+END_MAP; -- cartesian_coordinate_system
+
+-- DONE
+MAP cartesian_point
+  AS   gri : aim.cartesian_point;
+  SUBTYPE OF (geometric_representation_item);
+  WHERE 'AP210ARM_EXTENDED.CARTESIAN_POINT' IN TYPEOF(si);
+  -- si.coordinates: LIST [1:3] OF real;
+SELECT
+  gri.name := '';
+  gri.coordinates := FOR EACH coord IN si.coordinates RETURN coord;
+END_MAP; -- cartesian_point
+
+-- DONE
+MAP cartesian_transformation_operator_2d
+  AS   cto2  : aim.cartesian_transformation_operator_2d;
+  FROM cto2e : erm.cartesian_transformation_operator_2d;
+SELECT
+  cto2\representation_item.name := '';
+  cto2\functionally_defined_transformation.name := '';
+  --cto2.description: OPTIONAL text;
+  cto2.axis1 := d@orientation(cto2e.device_orientation);
+  --cto2.axis2: OPTIONAL direction;
+  cto2.local_origin := gri@cartesian_point(cto2e.translation);
+  cto2.scale := cto2e.scale;
+END_MAP; -- cartesian_transformation_operator_2d
+
+-- DONE
+MAP circular_area
+  AS   gri : aim.circular_area;
+  SUBTYPE OF (geometric_representation_item);
+  WHERE 'AP210ARM_EXTENDED.CIRCULAR_AREA' IN TYPEOF(si);
+   --si.centre: cartesian_point;
+   --si.radius: length_data_element;
+SELECT
+  gri.name := '';
+  gri.centre := gri@cartesian_point(si.centre);
+  gri.radius := si.radius.measure_value;
+END_MAP; -- circular_area
+
+MAP component_2d_location
+  AS   cl  : aim.component_location;
+  FROM c2l : erm.component_2d_location;
+SELECT
+  cl.name := 'c2l';
+--  cl.items: SET [1:?] OF representation_item;
+--  cl.context_of_items: representation_context;
+END_MAP; -- component_2d_location
+
+MAP component_assembly_2d_position
+  AS   mi   : aim.mapped_item;
+  FROM ca2p : erm.component_assembly_2d_position;
+   --ca2p.component_model: assembly_component_2d_shape;
+   --ca2p.transformation: component_2d_location;
+   --ca2p.assembly_model: physical_unit_planar_shape;
+   --ca2p.component: next_higher_assembly_relationship;
+SELECT
+  mi.name := 'ca2p';
+--  mi.mapping_source: representation_map;
+--  mi.mapping_target: representation_item;
+END_MAP; -- component_assembly_2d_position
+
+MAP component_part_2d_geometric_representation_relationship
+  AS   srr    : aim.shape_representation_relationship;
+  FROM cp2grr : erm.component_part_2d_geometric_representation_relationship;
+   --cp2grr\geometric_representation_relationship.shape_1: shape_definition;
+   --cp2grr\geometric_representation_relationship.shape_2: shape_definition;
+   --cp2grr\geometric_representation_relationship.purpose: OPTIONAL geometric_representation_relationship_purpose;
+SELECT
+  srr.name := 'component part planar shape';
+  --srr.description: OPTIONAL text;
+  srr.rep_1 := sr@planar_projected_shape(cp2grr.shape_1);
+  srr.rep_2 := sr@planar_projected_shape(cp2grr.shape_2);
+END_MAP; -- component_part_2d_geometric_representation_relationship
+
+MAP date_and_time
+  AS   dat : aim.date_and_time;
+       cd  : aim.calendar_date;
+       lt  : aim.local_time;
+  FROM dt  : erm.date_and_time;
+   --dt.day: integer;
+   --dt.year: integer;
+   --dt.month: month_representation;
+   --dt.hour: integer;
+   --dt.minute: integer;
+   --dt.second: integer;
+   --dt.time_zone: integer;
+   --dt.time_zone_sense: ahead_or_behind;
+SELECT
+  dat.date_component := cd;
+  dat.time_component := lt;
+
+  cd.year_component := dt.year;
+  cd.day_component := dt.day;
+  cd.month_component := dt.month;
+
+  lt.hour_component := dt.hour;
+  lt.minute_component := dt.minute;
+  lt.second_component := dt.second;
+--  lt.zone: coordinated_universal_time_offset;
+END_MAP; -- date_and_time
+
+MAP ee_approval
+  AS   a  : aim.approval;
+  FROM ea : erm.ee_approval;
+SELECT
+--  a.status: approval_status;
+--  a.level := ea.purpose;
+  a.level := 'ee_approval';
+END_MAP; -- ee_approval
+
+MAP ee_document_identifier
+  AS   di  : aim.document_identifier;
+  FROM edi : erm.ee_document_identifier;
+SELECT
+  di.name := edi.identifier_name;
+  di.description := edi.assigned_value; --OPTIONAL text;
+END_MAP; -- ee_document_identifier
+
+MAP ee_product
+  AS   p  : aim.product;
+  FROM ep : erm.ee_product;
+   --ep.description: ee_text;
+   --ep.product_nomenclature: ee_name;
+   --ep.part_number: ee_name;
+   --ep.design_owner: person_organization;
+   --ep.standard_product_indicator: OPTIONAL boolean;
+SELECT
+  p.id := ep.part_number;
+  p.name := ep.product_nomenclature;
+  p.description := ep.description.content;
+--  p.frame_of_reference: SET [1:?] OF product_context;
+END_MAP; -- ee_product
+
+MAP ee_product_version
+  AS   pdf : aim.product_definition_formation;
+  FROM epv : erm.ee_product_version;
+   --epv.creator: person_organization;
+   --epv.authorizing_agreement: OPTIONAL contract;
+   --epv.revision_code: ee_name;
+   --epv.versioned_item: ee_product;
+   --epv.security_code: security_classification;
+   --epv.product_version_approval: ee_approval;
+   --epv.life_cycle_status: life_cycle_stage;
+   --epv.product_supplier: OPTIONAL person_organization;
+   --epv.design_supplier: OPTIONAL person_organization;
+SELECT
+  pdf.id := epv.revision_code;
+  --pdf.description : OPTIONAL text;
+  pdf.of_product := p@ee_product(epv.versioned_item);
+END_MAP; -- ee_product_version
+
+MAP ee_requirement_occurrence
+  AS   rp  : aim.requirements_property;
+  FROM ero : erm.ee_requirement_occurrence;
+   --ero.associated_definition: requirement_definition;
+   --ero.required_analytical_representation: OPTIONAL SET [1:?] OF analytical_representation;
+   --ero.required_functional_specification: OPTIONAL SET [1:?] OF functional_specification;
+   --ero.required_specification: OPTIONAL SET [1:?] OF ee_specification;
+   --ero.required_part: OPTIONAL SET [1:?] OF ee_product;
+   --ero.required_coordinated_characteristic: OPTIONAL SET [1:?] OF coordinated_characteristic;
+   --ero.requirement_specification: SET [1:?] OF ee_specification;
+   --ero.required_characteristic: OPTIONAL SET [1:?] OF characteristic;
+   --ero.required_material: OPTIONAL ee_material;
+   --ero.description: OPTIONAL ee_text;
+   --ero.name: ee_name;
+SELECT
+  rp.name := 'ee_requirement_occurrence';
+  rp.description := 'requirement occurrence'; --OPTIONAL text;
+  rp.definition := rd@requirement_definition(ero.associated_definition);
+END_MAP; -- ee_requirement_occurrence
+
+MAP ee_specification
+  AS   es  : aim.ee_specification;
+  FROM ese : erm.ee_specification;
+   --ese.publisher: person_organization;
+   --ese.key_phrase: OPTIONAL SET [1:?] OF structured_text;
+   --ese.document_approval: OPTIONAL ee_approval;
+   --ese.base_identifier: ee_document_identifier;
+   --ese.change_date: OPTIONAL SET [1:?] OF date_and_time;
+   --ese.creation_date: date_and_time;
+   --ese.security_code: OPTIONAL security_classification;
+   --ese.text_usage: OPTIONAL plain_or_structured_text;
+   --ese.author: OPTIONAL SET [1:?] OF person;
+   --ese.revision: OPTIONAL ee_name;
+   --ese.document_name: ee_name;
+   --ese.source: person_organization;
+   --ese.code_or_identifier: OPTIONAL string;
+SELECT
+  es.id := 'ee_specification';
+  es.name := '';
+  es.description := ese.code_or_identifier;
+--  es.kind: document_type;
+END_MAP; -- ee_specification
+
+-- DONE
+MAP ee_text
+  AS   dri : aim.descriptive_representation_item;
+  FROM et  : erm.ee_text;
+   --et.content: string;
+SELECT
+  dri.name := 'ee_text';
+  dri.description := et.content;
+END_MAP; -- ee_text
+
+MAP functional_unit_usage_view
+  AS  pd  : aim.functional_unit;
+      pds : aim.product_definition_shape;
+  SUBTYPE OF (physical_unit);
+  WHERE 'AP210ARM_EXTENDED.FUNCTIONAL_UNIT_USAGE_VIEW' IN TYPEOF(epd);
+SELECT
+  pd.description := 'functional unit usage view';
+  pd.frame_of_reference := pdc@product_definition_context('functional design usage');
+END_MAP; -- functional_unit_usage_view
+
+MAP interconnect_module_component
+  AS   cd  : aim.component_definition;
+       na  : aim.name_attribute;
+  SUBTYPE OF (physical_component);
+  WHERE 'AP210ARM_EXTENDED.INTERCONNECT_MODULE_COMPONENT' IN TYPEOF(ac);
+   --ac.usage_definition: interconnect_module_usage_view;
+SELECT
+  na.attribute_value := 'interconnect module';
+  na.named_item := cd;
+
+  cd.id := 'interconnect_module_component';
+  cd.description := 'interconnect module component';
+  cd.formation := pd@interconnect_module_usage_view(ac.usage_definition).formation;
+END_MAP; -- interconnect_module_component
+
+MAP interconnect_module_edge_surface
+  AS   sa   : aim.shape_aspect;
+  SUBTYPE OF (part_feature);
+  WHERE 'AP210ARM_INTERCONNECT_MODULE_EDGE_SURFACE' IN TYPEOF(pf);
+   --imes\shape_element.name: ee_name;
+   --imes\shape_element.description: OPTIONAL label;
+   --imes\part_feature.associated_definition: interconnect_module_usage_view;
+   --imes\part_feature.material_state_change: OPTIONAL material_state_change_enumeration;
+   --imes\part_feature.precedent_feature: OPTIONAL part_feature;
+SELECT
+  sa.name := '';
+  sa.description := 'interconnect module edge surface';
+  sa.of_shape := pds@interconnect_module_usage_view(pf.associated_definition);
+  sa.product_definitional := false; -- should be unknown, but that doesn't work
+END_MAP; -- interconnect_module_edge_surface
+
+MAP interconnect_module_usage_view
+  AS  pd  : aim.physical_unit;
+      pds : aim.product_definition_shape;
+      na  : aim.name_attribute;
+  SUBTYPE OF (physical_unit_usage_view);
+  WHERE 'AP210ARM_EXTENDED.INTERCONNECT_MODULE_USAGE_VIEW' IN TYPEOF(epd);
+SELECT
+  pd.description := 'interconnect module usage view';
+  pd.frame_of_reference := pdc@product_definition_context('physical design usage');
+
+  pds.definition := pd;
+
+  na.attribute_value := 'interconnect module';
+  na.named_item := pd;
+END_MAP; -- interconnect_module_usage_view
+
+-- may convert this to a DEPENDENT_MAP since some LME's are converted
+-- and some aren't
+MAP length_data_element
+  AS   lmwu : aim.length_measure_with_unit;
+  FROM lde  : erm.length_data_element;
+SELECT
+   lmwu.value_component := 'length_data_element';
+--  lmwu.value_component: measure_value;
+--  lmwu.unit_component: unit;
+END_MAP; -- length_data_element
+
+MAP assembly_composition_relationship
+  AS   acu : aim.assembly_component_usage;
+  FROM acr : erm.assembly_composition_relationship;
+SELECT
+  acu.id := '';
+  acu.name := 'assembly composition';
+  --acu.description: OPTIONAL text;
+  acu.relating_product_definition := pd@physical_unit_design_view(acr.assembly);
+  acu.related_product_definition  := cd@assembly_component(acr.component);
+  --acu.reference_designator: OPTIONAL identifier;
+END_MAP; -- assembly_composition_relationship
+
+MAP next_higher_assembly_relationship
+  AS  acu : aim.next_assembly_usage_occurrence;
+  SUBTYPE OF (assembly_composition_relationship);
+  WHERE 'AP210ARM_EXTENDED.NEXT_HIGHER_ASSEMBLY_RELATIONSHIP' IN TYPEOF(acr)
+    --AND NOT EXISTS(acr.quantity)
+    ;
+SELECT
+  acu.reference_designator := acr.reference_designation;
+END_MAP; -- next_higher_assembly_relationship
+
+--MAP next_higher_assembly_relationship
+--  AS  acu : aim.next_assembly_usage_occurrence
+--          & aim.quantified_assembly_component_usage;
+--  SUBTYPE OF (assembly_composition_relationship);
+--  WHERE 'AP210ARM_EXTENDED.NEXT_HIGHER_ASSEMBLY_RELATIONSHIP' IN TYPEOF(acr)
+--    AND EXISTS(acr.quantity);
+--SELECT
+--  acu.reference_designator := acr.reference_designation;
+----  acu.quantity := ??;
+--END_MAP; -- next_higher_assembly_relationship
+
+MAP organization
+  AS   o  : aim.organization;
+  FROM oe : erm.organization;
+SELECT
+  o.id := oe.identifier;
+--  o.name: label;
+  --o.description: OPTIONAL text;
+END_MAP; -- organization
+
+-- DONE
+MAP orientation
+  AS   d : aim.direction;
+  FROM o : erm.orientation;
+SELECT
+  d.name := 'orientation';
+  d.direction_ratios := FOR EACH val IN o.direction_ratios
+			RETURN val;
+END_MAP; -- orientation
+
+MAP package
+  AS  pd  : aim.package;
+      pds : aim.product_definition_shape;
+  SUBTYPE OF (physical_unit_usage_view);
+  WHERE 'AP210ARM_EXTENDED.PACKAGE' IN TYPEOF(epd);
+SELECT
+  pd.description := 'package';
+  pd.frame_of_reference := pdc@product_definition_context('physical design usage');
+
+  pds.name := '';
+  --pds.description: OPTIONAL text;
+  pds.definition := pd;
+-- DERIVE
+--   property_definition.id: identifier := get_id_value(SELF);
+END_MAP; -- package
+
+--MAP package__package_seating_plane
+--  AS  sar : aim.shape_aspect_relationship;
+--      sa  : aim.shape_aspect;
+--  FROM pkg : erm.package;
+--       sp  : erm.seating_plane;
+--  WHERE pkg.package_seating_plane = sp;
+--SELECT
+--  sar.name := 'package seating plane';
+--  --sar.description: OPTIONAL text;
+--  sar.relating_shape_aspect := sp@seating_plane(sp);
+--  sar.related_shape_aspect  := sa;
+---- DERIVE
+----   id: identifier := get_id_value(SELF);
+--
+--  sa.name := '';
+--  --sa.description: OPTIONAL text;
+--  sa.of_shape := pds@package(pkg);
+--  sa.product_definitional := false;
+---- DERIVE
+----   sa.id: identifier := get_id_value(SELF);
+--END_MAP; -- package__package_seating_plane
+
+MAP assembly_component
+  AS   cd  : aim.component_definition;
+       pds : aim.product_definition_shape;
+  FROM ac  : erm.assembly_component;
+   --ac.usage_definition: OPTIONAL physical_unit_or_part_template;
+SELECT
+  cd.id := '';
+  --cd.description: OPTIONAL text;
+  cd.formation := pd@physical_unit(ac.usage_definition).formation;
+  cd.frame_of_reference := pdc@product_definition_context('physical occurrence');
+-- DERIVE
+--   product_definition.name: label := get_name_value(SELF);
+
+  pds.name := '';
+  --pds.description: OPTIONAL label;
+  pds.definition := cd;
+-- DERIVE
+--   pds\property_definition.id: identifier := get_id_value(SELF);
+END_MAP; -- assembly_component
+
+MAP physical_component
+  AS   cd : aim.component_definition;
+  SUBTYPE OF (assembly_component);
+  WHERE 'AP210ARM_EXTENDED.PHYSICAL_COMPONENT' IN TYPEOF(ac);
+SELECT
+  cd.description := 'physical component';
+END_MAP; -- physical_component
+
+MAP packaged_component
+  AS   cd  : aim.packaged_component;
+  SUBTYPE OF (physical_component);
+  WHERE 'AP210ARM_EXTENDED.PACKAGED_COMPONENT' IN TYPEOF(ac);
+SELECT
+  cd.id := '';
+  cd.description := 'packaged comonent';
+END_MAP; -- packaged_component
+
+MAP component_2_part
+  AS   pdr : aim.product_definition_relationship;
+  FROM pc  : erm.assembly_component;
+       pp  : erm.physical_unit;
+  WHERE pc.usage_definition = pp;
+SELECT
+  pdr.id := '';
+  pdr.name := 'instantiated part';
+  --pdr.description: OPTIONAL text;
+  pdr.relating_product_definition := pd@physical_unit(pp);
+  pdr.related_product_definition  := cd@assembly_component(pc);
+END_MAP; -- component_2_part
+
+MAP packaged_part
+  AS  pd  : aim.packaged_part;
+  SUBTYPE OF (physical_unit_usage_view);
+  WHERE 'AP210ARM_EXTENDED.PACKAGED_PART' IN TYPEOF(epd);
+SELECT
+  pd.description := 'packaged part';
+  pd.frame_of_reference := pdc@product_definition_context('physical design usage');
+END_MAP; -- packaged_part
+
+MAP part_feature
+  AS   sa : aim.shape_aspect;
+  FROM pf : erm.part_feature;
+   --pf\shape_element.name: ee_name;
+   --pf\shape_element.description: OPTIONAL label;
+   --pf.associated_definition: physical_unit_usage_view;
+   --pf.material_state_change: OPTIONAL material_state_change_enumeration;
+   --pf.precedent_feature: OPTIONAL part_feature;
+SELECT
+  sa.name := pf.name;
+  sa.description := 'part generic feature';
+  sa.of_shape := pds@physical_unit_usage_view(pf.associated_definition);
+  sa.product_definitional := false;
+END_MAP; -- part_feature
+
+MAP person
+  AS   p  : aim.person;
+  FROM pe : erm.person;
+SELECT
+  p.id := pe.identifier;
+  --p.last_name: OPTIONAL label;
+  --p.first_name: OPTIONAL label;
+  --p.middle_names: OPTIONAL LIST [1:?] OF label;
+  --p.prefix_titles: OPTIONAL LIST [1:?] OF label;
+  --p.suffix_titles: OPTIONAL LIST [1:?] OF label;
+END_MAP; -- person
+
+-- DONE
+MAP person_and_organization
+  AS   pao  : aim.person_and_organization;
+  FROM paoe : erm.person_and_organization;
+SELECT
+  pao.the_person := p@person(paoe.assigned_person);
+  pao.the_organization := o@organization(paoe.assigned_organization);
+END_MAP; -- person_and_organization
+
+MAP physical_unit_planar_shape
+  AS  sr : aim.geometrically_bounded_2d_wireframe_representation;
+  SUBTYPE OF (planar_projected_shape);
+  WHERE 'AP210ARM_EXTENDED.PHYSICAL_UNIT_PLANAR_SHAPE' IN TYPEOF(sd);
+   --pps\shape_definition.geometric_context: cartesian_coordinate_system;
+   --pps\shape_definition.element: OPTIONAL SET [1:?] OF shape_item;
+   --pps.application_technology_constraint: OPTIONAL ee_requirement_occurrence;
+   --pps.shape_characterized_physical_unit: physical_unit;
+   --pps.shape_location_with_respect_to_seating_plane: shape_location;
+   --pps.shape_material_condition: material_condition;
+   --pps.centroid_location: OPTIONAL cartesian_point;
+   --pps.shape_environment: environment;
+   --pps.shape_purpose: planar_purpose;
+SELECT
+  sr.name := 'pups -- planar projected shape';
+END_MAP; -- phsical_unit_planar_shape
+
+MAP shape_definition
+  AS  sr  : aim.shape_representation;
+  FROM sd : erm.shape_definition; -- ABSTRACT
+   --sd.geometric_context: cartesian_coordinate_system;
+   --sd.element: OPTIONAL SET [1:?] OF shape_item;
+SELECT
+  sr.name := 'sd -- ';
+--  sr.items: SET [1:?] OF representation_item;
+  sr.items := IF NOT(EXISTS(sd.element))
+	      THEN ?
+	      ELSE FOR EACH elem in sd.element
+		   RETURN gri@geometric_representation_item(elem)
+	      END_IF;
+  sr.context_of_items := gc@cartesian_coordinate_system(sd.geometric_context);
+-- DERIVE
+--   representation.id: identifier := get_id_value(SELF);
+--   representation.description: text := get_description_value(SELF);
+END_MAP; -- shape_definition
+
+MAP planar_projected_shape
+  AS   sr  : aim.geometrically_bounded_2d_wireframe_representation;
+  SUBTYPE OF (shape_definition);
+  WHERE 'AP210ARM_EXTENDED.PLANAR_PROJECTED_SHAPE' IN TYPEOF(sd);
+   --pps\shape_definition.geometric_context: cartesian_coordinate_system;
+   --pps\shape_definition.element: OPTIONAL SET [1:?] OF shape_item;
+SELECT
+  sr.name := 'pps -- planar projected shape';
+END_MAP; -- planar_projected_shape
+
+MAP polyline
+  AS   gri : aim.polyline;
+  SUBTYPE OF (geometric_representation_item);
+  WHERE 'AP210ARM_EXTENDED.POLYLINE' IN TYPEOF(si);
+SELECT
+  gri.name := 'polyline';
+  gri.points := FOR EACH pt in si.points
+		RETURN gri@cartesian_point(pt);
+END_MAP; -- polyline
+
+MAP registered_style
+  AS   r  : aim.representation;
+  FROM rs : erm.registered_style;
+SELECT
+  r.name := 'registered case style';
+--  r.items: SET [1:?] OF representation_item;
+--  r.context_of_items: representation_context;
+END_MAP; -- registered_style
+
+(* object in ra.target_product_object determines what requirement_allocation maps to *)
+--MAP requirement_allocation
+--  AS   ;
+--  FROM ra : erm.requirement_allocation;
+--END_MAP; -- requirement_allocation
+
+MAP requirement_definition
+  AS   rd  : aim.requirement_definition;
+  FROM rde : erm.requirement_definition;
+   --rde\ee_product_definition.creator: SET [1:?] OF person_organization;
+   --rde\ee_product_definition.product_definition_id: ee_name;
+   --rde\ee_product_definition.security_code: security_classification;
+   --rde\ee_product_definition.context_description: ee_text;
+   --rde\ee_product_definition.version: ee_product_version;
+   --rde\ee_product_definition.product_definition_approval: ee_approval;
+   --rde\ee_product_definition.creation_date: date_and_time;
+   --rde\ee_product_definition.documentation: OPTIONAL SET [1:?] OF ee_document;
+   --rde\ee_product_definition.cad_filename: OPTIONAL ee_name;
+   --rde\ee_product_definition.discipline_id: ee_name;
+SELECT
+  rd.id := '';
+  rd.description := 'requirement definition';
+  rd.formation := pdf@ee_product_version(rde.version);
+  rd.frame_of_reference := pdc@product_definition_context('design requirement');
+END_MAP; -- requirement_definition
+
+MAP seating_plane
+  AS   sp  : aim.seating_plane;
+  FROM spe : erm.seating_plane;
+   --spe\shape_element.name: label;
+   --spe\shape_element.description: OPTIONAL label;
+   --spe\non_feature_shape_element.scope: ee_product_definition_with_annotation_elements;
+SELECT
+  sp.name := '';
+  sp.description := 'seating plane';
+--  sp.of_shape: product_definition_shape;
+  sp.product_definitional := false;
+END_MAP; -- seating_plane
+
+MAP security_classification
+  AS   sc  : aim.security_classification;
+  FROM sce : erm.security_classification;
+SELECT
+  sc.name := 'security_classification';
+--  sc.purpose: text;
+--  sc.security_level: security_classification_level;
+END_MAP; -- security_classification
+
+MAP usage_concept_usage_relationship
+  AS   mi   : aim.mapped_item;
+       rm   : aim.representation_map;
+  FROM ucur : erm.usage_concept_usage_relationship;
+   --ucur.associating_non_feature_usage_shape: OPTIONAL non_feature_shape_definition;
+   --PUPS*ucur.associating_usage_shape: OPTIONAL part_template_or_physical_unit_shape_select;
+   --IMES/PF*ucur.associated_usage: usage_concept;
+   --PPS*ucur.associated_shape_definition: shape_definition;
+   --ucur.associated_usage_placement: axis_placement;
+SELECT
+  mi.name := '**usage-concept-usage-relationship';
+--  mi.mapping_source: representation_map;
+--  mi.mapping_target: representation_item;
+
+--  rm.mapping_origin: representation_item;
+  rm.mapped_representation := sr@shape_definition(ucur.associated_shape_definition);
+END_MAP; -- usage_concept_usage_relationship
+
+--MAP ucur__associating_usage_shape
+--  AS 
+
+DEPENDENT_MAP product_definition_context
+  AS  pdc : aim.product_definition_context;
+  FROM n : STRING;
+SELECT
+  pdc.name := n;
+--  pdc.frame_of_reference: application_context;
+--  pdc.life_cycle_stage: label;
+END_DEPENDENT_MAP; -- product_definition_context
+
+END_SCHEMA_MAP; -- erm210_to_aim210

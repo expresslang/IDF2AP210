@@ -1,0 +1,269 @@
+SCHEMA IDF_V2;
+
+----------------------------------------------------------------------
+-- This schema represents the data contained in IDF V2.0 files (both 
+-- the board file and the library file). This schema was created to 
+-- support Phase 1 of the PDES, Inc. Electromechanical Pilot.
+--
+-- This schema will be used with an E/M schema (based on a mapping 
+-- from IDF to AP210) to create an IDF/AP210 bidirectional translator.
+--
+-- Author: Brad L. Kicklighter, Advanced Project Engineer,
+-- Engineering Information Technology, Delphi Delco Electronics Systems
+-- blkickli@mail.delcoelect.com
+--
+-- Revision Record
+----------------------------------------------------------------------
+-- December 4, 1997 - Released
+----------------------------------------------------------------------
+-- December 17, 1997 - Added inverse attribute composed_loop to 
+-- entity arc. Changed attribute board_file_version to 
+-- library_file_version on entity library_header.
+----------------------------------------------------------------------
+-- December 22, 1997 - On entities board_outline and other_outline,
+-- replaced attribute outline_and_cutouts with attributes outline and 
+-- cutouts (optional).
+----------------------------------------------------------------------
+-- February 21, 1998 - Changed data type on attribute 
+-- idf_version_number on entities board_header and library_header from 
+-- real to string. 
+----------------------------------------------------------------------
+-- April 17, 1998 - Changed the list specification from 2:? to 3:? on
+-- attribute closed_curve on entity loop. A circle cannot be 
+-- unambiguously defined by one point, it takes two points to do so.
+-- The first point is always repeated at the end of the closed curve,
+-- hence the list goes from 3 to many.
+----------------------------------------------------------------------
+
+-- Entity List
+-- idf_data
+-- board_data
+-- library_data
+-- board_header
+-- library_header
+-- single_outline
+--   route_outline
+--   place_outline
+--   route_keepout
+--   via_keepout
+--   place_keepout
+--   place_region
+-- board_outline
+-- loop
+-- arc
+-- other_outline
+-- drilled_holes
+-- placement
+-- electrical
+-- mechanical
+
+TYPE units_definition_enumeration = ENUMERATION OF (
+   MM,
+   TNM,
+   THOU);
+END_TYPE; -- units_definition_enumeration
+
+TYPE inner_and_outer_layers_enumeration = ENUMERATION OF (
+   TOP,
+   BOTTOM,
+   BOTH,
+   ALL);
+END_TYPE; -- inner_and_outer_layers_enumeration
+
+TYPE outer_layers_enumeration = ENUMERATION OF (
+   TOP,
+   BOTTOM,
+   BOTH);
+END_TYPE; -- outer_layers_enumeration
+
+TYPE hole_type_enumeration = ENUMERATION OF (
+   PTH,
+   NPTH);
+END_TYPE; -- hole_type_enumeration
+
+TYPE top_or_bottom_enumeration = ENUMERATION OF (
+   TOP,
+   BOTTOM);
+END_TYPE; -- top_or_bottom_enumeration
+
+TYPE placement_status_enumeration = ENUMERATION OF (
+   PLACEMENT_FIXED,
+   UNPLACED,
+   PLACED);
+END_TYPE; -- placement_status_enumeration
+
+-- This is the top level entity in the schema.
+-- The board and library files may not be present at the same time
+-- thus, they are listed as optional.
+ENTITY idf_data;
+   board_file   : OPTIONAL board_data;
+   library_file : OPTIONAL library_data;
+END_ENTITY; -- idf_data
+
+-- This is the container entity that represents the data stored in
+-- a board file. All data sections in a board file (except the 
+-- header) are optional.
+ENTITY board_data;
+   board_board_header   : board_header;
+   board_board_outline  : OPTIONAL board_outline;
+   board_other_outline  : OPTIONAL SET [1:?] OF other_outline;
+   board_route_outline  : OPTIONAL SET [1:?] OF route_outline;
+   board_place_outline  : OPTIONAL SET [1:?] OF place_outline;
+   board_route_keepout  : OPTIONAL SET [1:?] OF route_keepout;
+   board_via_keepout    : OPTIONAL SET [1:?] OF via_keepout;
+   board_place_keepout  : OPTIONAL SET [1:?] OF place_keepout;
+   board_place_region   : OPTIONAL SET [1:?] OF place_region;
+   board_drilled_holes  : OPTIONAL SET [1:?] OF drilled_holes;
+   board_placement      : OPTIONAL SET [1:?] OF placement;
+END_ENTITY; -- board_data
+
+-- This is the container entity that represents the data stored in
+-- a libary file. All data sections in a libary file (except the 
+-- header) are optional.
+ENTITY library_data;
+   library_library_header: library_header;
+   library_electrical  : OPTIONAL SET [1:?] OF electrical;
+   library_mechanical  : OPTIONAL SET [1:?] OF mechanical;
+END_ENTITY; -- library_data
+
+ENTITY board_header;
+   idf_version_number            : STRING;
+   source_system_identification  : STRING;
+   date                          : STRING;
+   board_file_version            : INTEGER;
+   board_name                    : STRING;
+   units_definition: units_definition_enumeration;
+END_ENTITY; -- header
+
+ENTITY library_header;
+   idf_version_number            : STRING;
+   source_system_identification  : STRING;
+   date                          : STRING;
+   library_file_version          : INTEGER;
+END_ENTITY; -- header
+
+ENTITY single_outline;
+   outline  : loop;
+END_ENTITY; -- single_outline
+
+ENTITY board_outline;
+   board_thickness  : REAL;
+   outline          : loop;
+   cutouts          : OPTIONAL SET [1:?] OF loop;
+END_ENTITY; -- board_outline
+
+-- This entity represents a 2D outline consisting of lines
+-- and arcs.
+ENTITY loop;
+   loop_label    : INTEGER;
+   closed_curve  : LIST[3:?] OF arc;
+END_ENTITY; -- loop
+
+-- This entity represents one line or arc in a closed curve.
+ENTITY arc;
+   x_coord         : REAL;
+   y_coord         : REAL;
+   included_angle  : REAL;
+ INVERSE
+   composed_loop: loop FOR closed_curve;
+END_ENTITY; -- arc
+
+ENTITY other_outline;
+   outline_identifier  : STRING;
+   extrude_thickness   : REAL;
+   outline             : loop;
+   cutouts             : OPTIONAL SET [1:?] OF loop;
+END_ENTITY; -- other_outline
+
+-- The IDF specification states that the routing outline is
+-- applicable to all layers of the board. This data is not
+-- explicitly stored in an IDF file. A derived attribute
+-- has been added to this entity to explicitly state that
+-- the routing outline affects all layers of the board.
+ENTITY route_outline
+    SUBTYPE OF (single_outline);
+DERIVE
+   routing_layers  : inner_and_outer_layers_enumeration := ALL;
+END_ENTITY; -- route_outline
+
+-- The IDF specification states that the placement outline is
+-- applicable to both the top and bottom layers of the board. 
+-- This data is not explicitly stored in an IDF file. A derived 
+-- attribute has been added to this entity to explicitly state 
+-- that the placement outline affects both the top and bottom
+-- layers of the board.
+ENTITY place_outline
+    SUBTYPE OF (single_outline);
+DERIVE
+   place_layers  : outer_layers_enumeration := BOTH;
+END_ENTITY; -- place_outline
+
+ENTITY route_keepout
+    SUBTYPE OF (single_outline);
+   routing_layers  : inner_and_outer_layers_enumeration;
+END_ENTITY; -- route_keepout
+
+-- The IDF specification states that the via keepout is
+-- applicable to both the top and bottom layers of the board. 
+-- This data is not explicitly stored in an IDF file. A derived 
+-- attribute has been added to this entity to explicitly state 
+-- that the via keepout affects both the top and bottom
+-- layers of the board.
+ENTITY via_keepout
+    SUBTYPE OF (single_outline);
+DERIVE
+   keepout_layers  : outer_layers_enumeration := BOTH;
+END_ENTITY; -- via_keepout
+
+-- Note that the minimum height, while present, is not supported by
+-- IDF.
+ENTITY place_keepout
+    SUBTYPE OF (single_outline);
+   board_side      : outer_layers_enumeration;
+   maximum_height  : REAL;
+   minimum_height  : REAL;
+END_ENTITY; -- place_keepout
+
+ENTITY place_region
+    SUBTYPE OF (single_outline);
+   board_side            : outer_layers_enumeration;
+   component_group_name  : STRING;
+END_ENTITY; -- place_region
+
+ENTITY drilled_holes;
+   hole_diameter           : REAL;
+   x_coord                 : REAL;
+   y_coord                 : REAL;
+   hole_type               : hole_type_enumeration;
+   associated_part_string  : STRING;
+END_ENTITY; -- drilled_holes
+
+ENTITY placement;
+   package_name          : STRING;
+   part_number           : STRING;
+   reference_designator  : STRING;
+   x_coord               : REAL;
+   y_coord               : REAL;
+   rotation_angle        : REAL;
+   side_of_board         : top_or_bottom_enumeration;
+   placement_status      : placement_status_enumeration;
+END_ENTITY; -- placement
+
+ENTITY electrical
+    SUBTYPE OF (single_outline);
+   geometry_name     : STRING;
+   part_number       : STRING;
+   units_definition  : units_definition_enumeration;
+   component_height  : REAL;
+END_ENTITY; -- electrical
+
+ENTITY mechanical
+    SUBTYPE OF (single_outline);
+   geometry_name     : STRING;
+   part_number       : STRING;
+   units_definition  : units_definition_enumeration;
+   component_height  : REAL;
+END_ENTITY; -- mechanical
+
+END_SCHEMA; -- IDF_V2
+

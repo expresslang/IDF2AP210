@@ -1,0 +1,4 @@
+
+This board is a surface mount redesign of an old sample board.  The
+redesign was done by Rockwell Collins specifically for the AP210 and
+EM Pilot teams.

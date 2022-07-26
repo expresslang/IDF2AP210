@@ -1,0 +1,984 @@
+-- -*- Mode: ExpressX -*-
+
+SCHEMA_MAP idf_2_erm210;
+  REFERENCE FROM idf : idf_v2            AS SOURCE;
+  REFERENCE FROM erm : ap210arm_extended AS TARGET;
+
+-- ************************************************************
+-- NOTES:
+-- Priorities are placement, board_outline, drilled_holes
+--
+-- type units_definition_enumeration	   --> ???
+-- type inner_and_outer_layers_enumeration --> ???
+-- type outer_layers_enumeration	   --> ???
+-- type hole_type_enumeration		   --> ???
+-- type top_or_bottom_enumeration	   --> ???
+-- type placement_status_enumeration	   --> ???
+--
+-- entity idf_data	 ==> AMUV
+-- entity board_data	 ==> IMUV (and friends)
+-- entity library_data	 ==> assembly_module
+-- entity board_header	 ==> eeP & eePV for IM
+-- entity library_header ==> eeP & eePV for AM
+-- entity single_outline --> ???
+-- entity board_outline	 ==> interconnect_module_edge_surface
+-- entity loop		 ==> polyline
+-- entity arc		 ==> cartesian_point (= angle 0.0)
+-- entity other_outline	 --> ???
+-- entity route_outline	 --> ???
+-- entity place_outline	 --> ???
+-- entity route_keepout	 --> ???
+-- entity via_keepout	 --> ???
+-- entity place_keepout	 --> ???
+-- entity place_region	 --> ???
+-- entity drilled_holes	 ==> assembly_composition_relationship
+-- entity placement	 ==> packaged_component (and friends)
+-- entity electrical	 ==> packaged_part (and friends)
+-- entity mechanical	 --> physical_unit_UV (and friends)
+-- ************************************************************
+
+
+MAP assembly_module_UV
+  AS   amuv : erm.assembly_module_usage_view;
+       pups : erm.physical_unit_planar_shape;
+  FROM id   : idf.idf_data;
+   -- id.board_file   : OPTIONAL board_data;
+   -- id.library_file : OPTIONAL library_data;
+SELECT
+  amuv.creator := [ org@organization('creator') ];
+  amuv.product_definition_id := 'amuv_pdid';
+  amuv.security_code := sc@security_classification('unsecure');
+  amuv.context_description := et@ee_text('ctx desc');
+  amuv.version := IF EXISTS(id.library_file)
+		  THEN amv@am_product(id.library_file.library_library_header)
+		  --ELSE unknown
+		  END_IF;
+  amuv.product_definition_approval := a@approval('bogus', erm.status.approved);
+  amuv.creation_date := dt@date_and_time('date');
+  --amuv.documentation: OPTIONAL SET [1:?] OF ee_document;
+  --amuv.cad_filename: OPTIONAL ee_name;
+  amuv.discipline_id := 'EM Pilot';
+  --amuv.analytical_physical_unit_representation: OPTIONAL SET [1:?] OF analytical_representation;
+  --amuv.unit_technology: OPTIONAL technology;
+  --amuv.physical_device_characteristic: OPTIONAL SET [1:?] OF characteristic;
+  --amuv.physical_device_coordinated_characteristic: OPTIONAL SET [1:?] OF coordinated_characteristic;
+  --amuv.design_requirement: OPTIONAL SET [1:?] OF ee_requirement_occurrence;
+  amuv.implemented_function := fuuv@functional_def('idf_data');
+  --amuv.maximum_negative_component_height: OPTIONAL datum_based_length_measure;
+  --amuv.maximum_positive_component_height: OPTIONAL datum_based_length_measure;
+
+  pups.geometric_context := ccs@cartesian_coordinate_system('mil', 1., 'mil');
+  --pups.element: OPTIONAL SET [1:?] OF shape_item;
+  --pups.application_technology_constraint: OPTIONAL ee_requirement_occurrence;
+  pups.shape_characterized_physical_unit := amuv;
+  --pups.shape_characterized_package: OPTIONAL package;
+  pups.shape_location_with_respect_to_seating_plane := erm.shape_location.below;
+  pups.shape_material_condition := erm.material_condition.nominal_material_condition;
+  --pups.centroid_location: OPTIONAL cartesian_point;
+  pups.shape_environment := erm.environment.manufacturing;
+  pups.shape_purpose := erm.predefined_planar_purpose.design;
+END_MAP; -- assembly_module_UV
+
+MAP assembly_module
+  AS   am   : erm.assembly_module;
+       pups : erm.physical_unit_planar_shape;
+  FROM ld   : idf.library_data;
+ --  ld.library_library_header: library_header;
+ --  ld.library_electrical  : OPTIONAL SET [1:?] OF electrical;
+ --  ld.library_mechanical  : OPTIONAL SET [1:?] OF mechanical;
+SELECT
+  am.creator := [ org@organization('creator') ];
+  am.product_definition_id := 'am_pdid';
+  am.security_code := sc@security_classification('unsecure');
+  am.context_description := et@ee_text('ctx desc');
+  am.version := amv@am_product(ld.library_library_header);
+  am.product_definition_approval := a@approval('bogus', erm.status.approved);
+  am.creation_date := dt@date_and_time('date');
+  --am.documentation: OPTIONAL SET [1:?] OF ee_document;
+  --am.cad_filename: OPTIONAL ee_name;
+  am.discipline_id := 'disc id';
+  --am.analytical_physical_unit_representation: OPTIONAL SET [1:?] OF analytical_representation;
+  --am.unit_technology: OPTIONAL technology;
+  --am.physical_device_characteristic: OPTIONAL SET [1:?] OF characteristic;
+  --am.physical_device_coordinated_characteristic: OPTIONAL SET [1:?] OF coordinated_characteristic;
+  --am.design_requirement: OPTIONAL SET [1:?] OF ee_requirement_occurrence;
+  am.usage_view := amuv@assembly_module_uv(EXTENT('IDF_V2.IDF_DATA')[1]);
+
+  pups.geometric_context := ccs@cartesian_coordinate_system('mil', 1., 'mil');
+  --pups.element: OPTIONAL SET [1:?] OF shape_item;
+  pups.application_technology_constraint := ero@ee_requirement_occurrence('idf_data');
+  pups.shape_characterized_physical_unit := am;
+  pups.shape_location_with_respect_to_seating_plane := erm.shape_location.below;
+  pups.shape_material_condition := erm.material_condition.nominal_material_condition;
+  --pups.centroid_location: OPTIONAL cartesian_point;
+  pups.shape_environment := erm.environment.manufacturing;
+  pups.shape_purpose := erm.predefined_planar_purpose.design;
+END_MAP; -- assembly_module
+
+MAP am_product
+  AS   amp : erm.ee_product;
+       amv : erm.ee_product_version;
+  FROM lh  : idf.library_header;
+ --  lh.idf_version_number            : STRING;
+ --  lh.source_system_identification  : STRING;
+ --  lh.date                          : STRING;
+ --  lh.library_file_version          : INTEGER;
+SELECT
+  amp.description := et@ee_text('desc');
+  amp.product_nomenclature := '';
+  amp.part_number := 'am design';
+  amp.design_owner := org@organization('designer');
+  --amp.standard_product_indicator: OPTIONAL BOOLEAN;
+
+  amv.creator := org@organization('designer');
+  --amv.authorizing_agreement: OPTIONAL contract;
+  amv.revision_code := '1';
+  amv.versioned_item := amp;
+  amv.security_code := sc@security_classification('unsecure');
+  amv.product_version_approval := a@approval('bogus', erm.status.approved);
+  amv.life_cycle_status := erm.life_cycle_stage.conceptual_design;
+  --amv.product_supplier: OPTIONAL person_organization;
+  --amv.design_supplier: OPTIONAL person_organization;
+END_MAP; -- am_product
+
+MAP interconnect_module_uv
+  AS   imuv : erm.interconnect_module_usage_view;
+       imc  : erm.interconnect_module_component;
+       nhar : erm.next_higher_assembly_relationship;
+       pups : erm.physical_unit_planar_shape;
+  FROM bd   : idf.board_data;
+ --  bd.board_board_header   : board_header;
+ --  bd.board_board_outline  : OPTIONAL board_outline;
+ --  bd.board_other_outline  : OPTIONAL SET [1:?] OF other_outline;
+ --  bd.board_route_outline  : OPTIONAL SET [1:?] OF route_outline;
+ --  bd.board_place_outline  : OPTIONAL SET [1:?] OF place_outline;
+ --  bd.board_route_keepout  : OPTIONAL SET [1:?] OF route_keepout;
+ --  bd.board_via_keepout    : OPTIONAL SET [1:?] OF via_keepout;
+ --  bd.board_place_keepout  : OPTIONAL SET [1:?] OF place_keepout;
+ --  bd.board_place_region   : OPTIONAL SET [1:?] OF place_region;
+ --  bd.board_drilled_holes  : OPTIONAL SET [1:?] OF drilled_holes;
+ --  bd.board_placement      : OPTIONAL SET [1:?] OF placement;
+  LOCAL
+   imv : erm.ee_product_version := imv@im_product(bd.board_board_header);
+  END_LOCAL;
+SELECT
+  imuv.creator := [ org@organization('creator') ];
+  imuv.product_definition_id := 'imuv_pdid';
+  imuv.security_code := sc@security_classification('unsecure');
+  imuv.context_description := et@ee_text('ctx desc');
+  imuv.version := imv;
+  imuv.product_definition_approval := a@approval('bogus', erm.status.approved);
+  imuv.creation_date := dt@date_and_time('date');
+  --imuv.documentation: OPTIONAL SET [1:?] OF ee_document;
+  --imuv.cad_filename: OPTIONAL ee_name;
+  imuv.discipline_id := 'EM Pilot';
+  --imuv.analytical_physical_unit_representation: OPTIONAL SET [1:?] OF analytical_representation;
+  --imuv.unit_technology: OPTIONAL technology;
+  --imuv.physical_device_characteristic: OPTIONAL SET [1:?] OF characteristic;
+  --imuv.physical_device_coordinated_characteristic: OPTIONAL SET [1:?] OF coordinated_characteristic;
+  --imuv.design_requirement: OPTIONAL SET [1:?] OF ee_requirement_occurrence;
+  --imuv.minimum_thickness_over_metal_requirement: OPTIONAL length_data_element;
+  --imuv.maximum_thickness_over_metal_requirement: OPTIONAL length_data_element;
+  --imuv.minimum_thickness_over_dielectric_requirement: OPTIONAL length_data_element;
+  --imuv.maximum_thickness_over_dielectric_requirement: OPTIONAL length_data_element;
+  --imuv.measurement_condition: OPTIONAL restraint_condition;
+  --imuv.located_thickness_requirement: OPTIONAL located_interconnect_module_thickness_requirement;
+  --imuv.implemented_function: OPTIONAL functional_unit_usage_view;
+
+  imc.usage_definition := imuv;
+
+  nhar.assembly := am@assembly_module(EXTENT('IDF_V2.LIBRARY_DATA')[1]);
+  nhar.component := imc;
+  nhar.security_code := sc@security_classification('unsecure');
+  --nhar.assembly_bonding_agent: OPTIONAL SET [1:?] OF ee_material;
+  --nhar.reference_designation: OPTIONAL ee_name;
+  --nhar.quantity: OPTIONAL data_element;
+
+  pups.geometric_context := ccs@cartesian_coordinate_system('mil', 1., 'mil');
+  --pups.element: OPTIONAL SET [1:?] OF shape_item;
+  pups.application_technology_constraint := ero@ee_requirement_occurrence('idf_data');
+  pups.shape_characterized_physical_unit := imuv;
+  pups.shape_location_with_respect_to_seating_plane := erm.shape_location.below;
+  pups.shape_material_condition := erm.material_condition.nominal_material_condition;
+  --pups.centroid_location: OPTIONAL cartesian_point;
+  pups.shape_environment := erm.environment.manufacturing;
+  pups.shape_purpose := erm.predefined_planar_purpose.design;
+END_MAP; -- interconnect_module
+
+MAP im_product
+  AS   imp : erm.ee_product;
+       imv : erm.ee_product_version;
+  FROM bh  : idf.board_header;
+ --  bh.idf_version_number            : STRING;
+ --  bh.source_system_identification  : STRING;
+ --  bh.date                          : STRING;
+ --  bh.board_file_version            : INTEGER;
+ --  bh.board_name                    : STRING;
+ --  bh.units_definition              : units_definition_enumeration;
+SELECT
+  imp.description := et@ee_text('desc');
+  imp.product_nomenclature := '';
+  imp.part_number := 'im design';
+  imp.design_owner := org@organization('designer');
+  --imp.standard_product_indicator: OPTIONAL BOOLEAN;
+
+  imv.creator := org@organization('designer');
+  --imv.authorizing_agreement: OPTIONAL contract;
+  imv.revision_code := '1';
+  imv.versioned_item := imp;
+  imv.security_code := sc@security_classification('unsecure');
+  imv.product_version_approval := a@approval('bogus', erm.status.approved);
+  imv.life_cycle_status := erm.life_cycle_stage.conceptual_design;
+  --imv.product_supplier: OPTIONAL person_organization;
+  --imv.design_supplier: OPTIONAL person_organization;
+END_MAP; -- im_product
+
+MAP board_outline
+  AS   imes : erm.interconnect_module_edge_surface;
+       ucur : erm.usage_concept_usage_relationship;
+       pps  : erm.planar_projected_shape;
+  FROM bo   : idf.board_outline;
+--  bo.board_thickness: real;
+--  bo.outline: loop;
+--  bo.cutouts: OPTIONAL SET [1:?] OF loop;
+SELECT
+  imes.name := 'board outline';
+  --imes.description: OPTIONAL label;
+  imes.associated_definition := imuv@interconnect_module_uv(EXTENT('IDF_V2.BOARD_DATA')[1]);
+  --imes.material_state_change: OPTIONAL material_state_change_enumeration;
+  --imes.precedent_feature: OPTIONAL part_feature;
+
+  --ucur.associating_non_feature_usage_shape: OPTIONAL non_feature_shape_definition;
+  ucur.associating_usage_shape := pups@interconnect_module_uv(EXTENT('IDF_V2.BOARD_DATA')[1]);
+  ucur.associated_usage := imes;
+  ucur.associated_shape_definition := pps;
+--  ucur.associated_usage_placement: axis_placement;
+
+  pps.geometric_context := ccs@cartesian_coordinate_system('mil', 1., 'mil');
+  pps.element := [ pl@loop(bo.outline) ];
+END_MAP; --board_outline
+
+MAP electrical
+  AS pp     : erm.packaged_part;
+     pkg    : erm.package;
+     pups   : erm.physical_unit_planar_shape;
+     ac2s   : erm.assembly_component_2d_shape;
+     cp2grr : erm.component_part_2d_geometric_representation_relationship;
+  FROM elec : idf.electrical;
+ --  elec.outline           : loop;
+ --  elec.geometry_name     : STRING;
+ --  elec.part_number       : STRING;
+ --  elec.units_definition  : units_definition_enumeration;
+ --  elec.component_height  : REAL;
+SELECT
+  pp.creator := [ org@organization('creator') ];
+  pp.product_definition_id := 'pp_pdid';
+  pp.security_code := sc@security_classification('unsecure');
+  pp.context_description := et@ee_text('ctx desc');
+  pp.version := epv@ee_p_pv(elec.part_number,'1','packaged part');
+  pp.product_definition_approval := a@approval('bogus', erm.status.approved);
+  pp.creation_date := dt@date_and_time('date');
+  --pp.documentation: OPTIONAL SET [1:?] OF ee_document;
+  --pp.cad_filename: OPTIONAL ee_name;
+  pp.discipline_id := 'disc id';
+  --pp.analytical_physical_unit_representation: OPTIONAL SET [1:?] OF analytical_representation;
+  --pp.unit_technology: OPTIONAL technology;
+  --pp.physical_device_characteristic: OPTIONAL SET [1:?] OF characteristic;
+  --pp.physical_device_coordinated_characteristic: OPTIONAL SET [1:?] OF coordinated_characteristic;
+  --pp.design_requirement: OPTIONAL SET [1:?] OF ee_requirement_occurrence;
+  pp.used_package := pkg;
+  --pp.potting_compound: OPTIONAL ee_material;
+  pp.implemented_function := fuuv@functional_def('electrical');
+
+  pkg.creator := [ org@organization('creator') ];
+  pkg.product_definition_id := 'pd_id';
+  pkg.security_code := sc@security_classification('unsecure');
+  pkg.context_description := et@ee_text('ctx desc');
+  pkg.version := epv@ee_p_pv(elec.geometry_name,'1','package');
+  pkg.product_definition_approval := a@approval('bogus', erm.status.approved);
+  pkg.creation_date := dt@date_and_time('date');
+  --pkg.documentation: OPTIONAL SET [1:?] OF ee_document;
+  --pkg.cad_filename: OPTIONAL ee_name;
+  pkg.discipline_id := 'disc id';
+  --pkg.analytical_physical_unit_representation: OPTIONAL SET [1:?] OF analytical_representation;
+  --pkg.unit_technology: OPTIONAL technology;
+  --pkg.physical_device_characteristic: OPTIONAL SET [1:?] OF characteristic;
+  --pkg.physical_device_coordinated_characteristic: OPTIONAL SET [1:?] OF coordinated_characteristic;
+  --pkg.design_requirement: OPTIONAL SET [1:?] OF ee_requirement_occurrence;
+  pkg.case_style := [ rs@registered_style(elec.geometry_name) ];
+
+-- this has been changed to an INVERSE
+--  pkg.package_seating_plane := sp@seating_plane('pkg');
+
+  --pkg.least_material_condition_centroid_location: OPTIONAL cartesian_point;
+  --pkg.maximum_material_condition_centroid_location: OPTIONAL cartesian_point;
+  pkg.maximum_body_height_above_seating_plane := lde@length_data_element(10.0, 'mil');
+  --pkg.maximum_body_height_below_seating_plane: OPTIONAL length_data_element;
+  --pkg.maximum_body_clearance_above_seating_plane: OPTIONAL length_data_element;
+  --pkg.maximum_body_clearance_below_seating_plane: OPTIONAL length_data_element;
+  --pkg.minimum_body_clearance_above_seating_plane: OPTIONAL length_data_element;
+  --pkg.minimum_body_clearance_below_seating_plane: OPTIONAL length_data_element;
+  --pkg.maximum_lead_length_below_seating_plane: OPTIONAL length_data_element;
+  --pkg.least_lead_length_below_seating_plane: OPTIONAL length_data_element;
+  --pkg.of_datum_reference_frame: OPTIONAL datum_reference_frame;
+  --pkg.of_defining_datum_system_relationship: OPTIONAL SET [1:3] OF datum_feature_usage_in_datum_system_relationship;
+  --pkg.of_derived_datum_system_definining_relationship: OPTIONAL SET [1:3] OF datum_usage_in_datum_system_relationship;
+
+  pups.geometric_context := ccs@cartesian_coordinate_system('mil', 1., 'mil');
+  pups.element := [ pl@loop(elec.outline) ];
+  pups.application_technology_constraint := ero@ee_requirement_occurrence('idf_data');
+  pups.shape_characterized_physical_unit := pkg;
+  pups.shape_location_with_respect_to_seating_plane := erm.shape_location.above;
+  pups.shape_material_condition := erm.material_condition.nominal_material_condition;
+  --pups.centroid_location: OPTIONAL cartesian_point;
+  pups.shape_environment := erm.environment.manufacturing;
+  pups.shape_purpose := erm.predefined_planar_purpose.design;
+
+  ac2s.geometric_context := ccs@cartesian_coordinate_system('mil', 1., 'mil');
+  --ac2s.element := [ c2l ];
+  ac2s.shape_characterized_component := FOR EACH plac IN QUERY(pl <* EXTENT('IDF_V2.PLACEMENT')
+								  | pl.part_number = elec.part_number)
+					RETURN pc@placement(plac);
+
+  cp2grr.shape_1 := pups;
+  cp2grr.shape_2 := ac2s;
+  --cp2grr.purpose: OPTIONAL geometric_representation_relationship_purpose;
+END_MAP; -- electrical
+
+MAP placement
+  AS   nhar   : erm.next_higher_assembly_relationship;
+       pc     : erm.packaged_component;
+       ca2p   : erm.component_assembly_2d_position;
+       c2l    : erm.component_2d_location;
+       cto2   : erm.cartesian_transformation_operator_2d;
+  FROM pl     : idf.placement;
+  --pl.package_name: STRING;				'827-3762-010'
+  --pl.part_number: STRING;				'8FP_28_MANUAL_0.058'
+  --pl.reference_designator: STRING;			'U1'
+  --pl.x_coord: REAL;					255.
+  --pl.y_coord: REAL;					1080.
+  --pl.rotation_angle: REAL;				180.
+  --pl.side_of_board: top_or_bottom_enumeration;	.TOP.
+  --pl.placement_status: placement_status_enumeration;	.PLACED.
+ LOCAL
+   elecs : SET OF idf.electrical := QUERY(el <* EXTENT('IDF_V2.ELECTRICAL')
+					     | el.part_number = pl.part_number);
+ END_LOCAL;
+SELECT
+  nhar.assembly := am@assembly_module(EXTENT('IDF_V2.LIBRARY_DATA')[1]);
+  nhar.component := pc;
+  nhar.security_code := sc@security_classification('unsecure');
+  --nhar.assembly_bonding_agent: OPTIONAL SET [1:?] OF ee_material;
+  nhar.reference_designation := IF EXISTS(pl.reference_designator)
+				THEN pl.reference_designator
+				END_IF;
+  --nhar.quantity: OPTIONAL data_element;
+
+  pc.usage_definition := pp@electrical(elecs[1]);
+  --pc.selected_package_alternate: OPTIONAL altered_package;
+
+  ca2p.component_model := ac2s@electrical(elecs[1]);
+  ca2p.transformation := c2l;
+  ca2p.assembly_model := pups@assembly_module(EXTENT('IDF_V2.LIBRARY_DATA')[1]);
+  ca2p.component := nhar;
+
+  c2l.placement_fixed := IF pl.placement_status = idf.placement_status_enumeration.placement_fixed
+			 THEN TRUE
+			 ELSE FALSE
+			 END_IF;
+  c2l.transformation := cto2;
+
+  cto2.device_orientation := o@orientation(pl);
+  cto2.translation := cp@mk_cp(pl.x_coord, pl.y_coord);
+  cto2.scale := 1.0;
+END_MAP; -- placement
+
+MAP plated_hole
+  AS   pf   : erm.part_feature;
+       ucur : erm.usage_concept_usage_relationship;
+       ra   : erm.requirement_allocation;
+       pps  : erm.planar_projected_shape;
+       ca   : erm.circular_area;
+  FROM dh   : idf.drilled_holes;
+  WHERE dh.hole_type = idf.hole_type_enumeration.pth;
+--  dh.hole_diameter           : REAL;
+--  dh.x_coord                 : REAL;
+--  dh.y_coord                 : REAL;
+--  dh.hole_type               : hole_type_enumeration;
+--  dh.associated_part_string  : STRING;
+SELECT
+  pf.name := '';
+  pf.description := 'plated hole';
+  pf.associated_definition := imuv@interconnect_module_uv(EXTENT('IDF_V2.BOARD_DATA')[1]);
+  pf.material_state_change := erm.material_state_change_enumeration.material_removal;
+  --pf.precedent_feature: OPTIONAL part_feature;
+
+  --ucur.associating_non_feature_usage_shape: OPTIONAL non_feature_shape_definition;
+  ucur.associating_usage_shape := pups@interconnect_module_uv(EXTENT('IDF_V2.BOARD_DATA')[1]);
+  ucur.associated_usage := pf;
+  ucur.associated_shape_definition := pps;
+--  ucur.associated_usage_placement: axis_placement;
+
+  pps.geometric_context := ccs@cartesian_coordinate_system('mil', 1., 'mil');
+  pps.element := [ ca ];
+
+  -- probably should recode this so that one RA points to all appropriate holes
+  ra.target_product_object := [ pf ];
+  -- this needs to be a MECRO with conductivity set to conductive
+--  ra.allocated_requirement: ee_requirement_occurrence;
+
+  ca.centre := cp@mk_cp(0.,0.);
+  ca.radius := lde@length_data_element(dh.hole_diameter, 'mil');
+END_MAP; -- plated_hole
+
+MAP non_plated_hole
+  AS   pf   : erm.part_feature;
+       ucur : erm.usage_concept_usage_relationship;
+       ra   : erm.requirement_allocation;
+       pps  : erm.planar_projected_shape;
+       ca   : erm.circular_area;
+  FROM dh   : idf.drilled_holes;
+  WHERE dh.hole_type = idf.hole_type_enumeration.npth;
+--  dh.hole_diameter           : REAL;
+--  dh.x_coord                 : REAL;
+--  dh.y_coord                 : REAL;
+--  dh.hole_type               : hole_type_enumeration;
+--  dh.associated_part_string  : STRING;
+SELECT
+  pf.name := '';
+  pf.description := 'non-plated hole';
+  pf.associated_definition := imuv@interconnect_module_uv(EXTENT('IDF_V2.BOARD_DATA')[1]);
+  pf.material_state_change := erm.material_state_change_enumeration.material_removal;
+  --pf.precedent_feature: OPTIONAL part_feature;
+
+  --ucur.associating_non_feature_usage_shape: OPTIONAL non_feature_shape_definition;
+  ucur.associating_usage_shape := pups@interconnect_module_uv(EXTENT('IDF_V2.BOARD_DATA')[1]);
+  ucur.associated_usage := pf;
+  ucur.associated_shape_definition := pps;
+--  ucur.associated_usage_placement: axis_placement;
+
+  pps.geometric_context := ccs@cartesian_coordinate_system('mil', 1., 'mil');
+  pps.element := [ ca ];
+
+  -- probably should recode this so that one RA points to all appropriate holes
+  ra.target_product_object := [ pf ];
+  -- this needs to be a MECRO with conductivity set to non_conductive
+--  ra.allocated_requirement: ee_requirement_occurrence;
+
+  ca.centre := cp@mk_cp(0.,0.);
+  ca.radius := lde@length_data_element(dh.hole_diameter,'mil');
+END_MAP; -- non_plated_hole
+
+-- This map is only valid when a.included_angle is 0.0
+MAP arc
+  AS   cp : erm.cartesian_point;
+  FROM a  : idf.arc;
+--   a.x_coord: real;
+--   a.y_coord: real;
+--   a.included_angle: real;
+SELECT
+  cp.coordinates := [ a.x_coord , a.y_coord ];
+END_MAP; -- arc
+
+MAP loop
+  AS   pl : erm.polyline;
+  FROM l  : idf.loop;
+--  l.loop_label: integer;
+--  l.closed_curve: LIST [3:?] OF arc;
+SELECT
+  pl.points := FOR EACH pt in l.closed_curve RETURN cp@arc(pt);
+END_MAP; -- loop
+
+--
+-- Dependent Maps
+--
+
+DEPENDENT_MAP ee_p_pv
+  AS   ep  : erm.ee_product;
+       epv : erm.ee_product_version;
+  FROM pn  : STRING;
+       rc  : STRING;
+       nom : STRING;
+SELECT
+  ep.description := et@ee_text('desc');
+  ep.product_nomenclature := nom;
+  ep.part_number := pn;
+  ep.design_owner := org@organization('designer');
+  --ep.standard_product_indicator: OPTIONAL BOOLEAN;
+
+  epv.creator := org@organization('designer');
+  --epv.authorizing_agreement: OPTIONAL contract;
+  epv.revision_code := rc;
+  epv.versioned_item := ep;
+  epv.security_code := sc@security_classification('unsecure');
+  epv.product_version_approval := a@approval('bogus', erm.status.approved);
+  epv.life_cycle_status := erm.life_cycle_stage.conceptual_design;
+  --epv.product_supplier: OPTIONAL person_organization;
+  --epv.design_supplier: OPTIONAL person_organization;
+END_DEPENDENT_MAP; -- im_product
+
+DEPENDENT_MAP via_template
+  AS   vt   : erm.via_template;
+       ptps : erm.part_template_planar_shape;
+       ca   : erm.circular_area;
+  FROM diameter : REAL;
+SELECT
+  --vt.item_version: OPTIONAL ee_name;
+  vt.library := 'VT ' + FORMAT(diameter,'5.3F');
+  --vt.item_name: OPTIONAL ee_name;
+  vt.name := 'VIA Template';
+  --vt.description: OPTIONAL label;
+  --vt.part_template_analytical_model: OPTIONAL analytical_model;
+  --vt.physical_characteristic: OPTIONAL SET [1:?] OF correlated_or_independent;
+  --vt.analytical_part_template_representation: OPTIONAL SET [1:?] OF analytical_representation;
+  vt.associated_definition := td@template_definition('td design','1');
+--  vt.of_passage_technology := defd@default_via_definition('', true);
+
+  ptps.geometric_context := ccs@cartesian_coordinate_system('mil', 1., 'mil');
+  ptps.element := [ ca ];
+  ptps.shape_characterized_part_template := vt;
+  --ptps.shape_environment: OPTIONAL environment;
+  ptps.shape_material_condition := erm.material_condition.nominal_material_condition;
+
+  ca.centre := cp@mk_cp(0.0,0.0);
+  ca.radius := lde@length_data_element(diameter,'mil');
+END_DEPENDENT_MAP; -- via_template
+
+DEPENDENT_MAP unsupported_passage_template
+  AS   upt  : erm.unsupported_passage_template;
+       ptps : erm.part_template_planar_shape;
+       ca   : erm.circular_area;
+  FROM diameter : REAL;
+SELECT
+  --upt.item_version: OPTIONAL ee_name;
+  upt.library := 'UPT ' + FORMAT(diameter,'5.3F');
+  --upt.item_name: OPTIONAL ee_name;
+  upt.name := 'Unsupported Passage Template';
+  --upt.description: OPTIONAL label;
+  --upt.part_template_analytical_model: OPTIONAL analytical_model;
+  --upt.physical_characteristic: OPTIONAL SET [1:?] OF correlated_or_independent;
+  --upt.analytical_part_template_representation: OPTIONAL SET [1:?] OF analytical_representation;
+  upt.associated_definition := td@template_definition('upt design', '1');
+--  upt.of_passage_technology := defd@default_unsupported_passage_definition('125 mil non-plated hole', FALSE, diameter);
+
+  ptps.geometric_context := ccs@cartesian_coordinate_system('mil', 1., 'mil');
+  ptps.element := [ ca ];
+  ptps.shape_characterized_part_template := upt;
+  --ptps.shape_environment: OPTIONAL environment;
+  ptps.shape_material_condition := erm.material_condition.nominal_material_condition;
+
+  ca.centre := cp@mk_cp(0.0,0.0);
+  ca.radius := lde@length_data_element(diameter,'mil');
+END_DEPENDENT_MAP; -- unsupported_passage_template
+
+DEPENDENT_MAP mk_cp
+  AS   cp : erm.cartesian_point;
+  FROM x  : REAL;
+       y  : REAL;
+SELECT
+  cp.coordinates := [ x , y ];
+END_DEPENDENT_MAP; -- mk_cp
+
+DEPENDENT_MAP mk_orientation
+  AS   o : erm.orientation;
+  FROM i : REAL;
+       j : REAL;
+SELECT
+  o.direction_ratios := [ i, j ];
+END_DEPENDENT_MAP; -- mk_orientation
+
+DEPENDENT_MAP length_data_element
+  AS   lde    : erm.length_data_element;
+  FROM radius : REAL;
+       units  : STRING;
+SELECT
+  lde.measure_value := radius;
+  lde.unit_of_measure := units;
+  lde.unit_of_measure_prefix := '';
+END_DEPENDENT_MAP; -- length_data_element
+
+DEPENDENT_MAP template_definition
+  AS   td   : erm.template_definition;
+  FROM name : STRING;
+       ver  : STRING;
+SELECT
+  td.creator := [ org@organization('creator') ];
+  td.product_definition_id := 'pd_id';
+  td.security_code := sc@security_classification('unsecure');
+  td.context_description := et@ee_text('ctx desc');
+  td.version := epv@ee_p_pv('design','1','template def');
+  td.product_definition_approval := a@approval('bogus', erm.status.approved);
+  td.creation_date := dt@date_and_time('date');
+  --td.documentation: OPTIONAL SET [1:?] OF ee_document;
+  --td.cad_filename: OPTIONAL ee_name;
+  td.discipline_id := 'disc id';
+END_DEPENDENT_MAP; -- template_definition
+
+DEPENDENT_MAP person_and_organization
+  AS   po : erm.person_and_organization;
+  FROM pn : STRING;
+       on : STRING;
+SELECT
+  po.assigned_person       := p@person(pn);
+  po.assigned_organization := org@organization(on);
+END_DEPENDENT_MAP; -- person_and_organization
+
+DEPENDENT_MAP person
+  AS    p  : erm.person;
+  FROM str : STRING;
+SELECT
+  p.identifier := str;
+  --p.address: OPTIONAL string;
+END_DEPENDENT_MAP; -- person
+
+DEPENDENT_MAP organization
+  AS org : erm.organization;
+  FROM n : STRING;
+SELECT
+  org.identifier := n;
+  --org.address: OPTIONAL string;
+END_DEPENDENT_MAP; -- organization
+
+DEPENDENT_MAP security_classification
+  AS   sc : erm.security_classification;
+  FROM str : STRING;
+SELECT
+  sc.classification_officer := po@person_and_organization('sec officer', 'sec department');
+  sc.security_classification_approval := a@approval('bogus', erm.status.approved);
+  sc.classification_date := dt@date_and_time('date');
+  --sc.declassification_date: OPTIONAL date_or_date_and_time;
+END_DEPENDENT_MAP; -- security_classification
+
+DEPENDENT_MAP ee_text
+  AS    et : erm.ee_text;
+  FROM str : STRING;
+SELECT
+  et.content := str;
+END_DEPENDENT_MAP; -- ee_text
+
+DEPENDENT_MAP approval
+  AS   a : erm.ee_approval;
+  FROM p : STRING;
+       s : status; -- oneof:  disapproved,withdrawn,not_yet_approved,approved
+SELECT
+  a.purpose := et@ee_text(p);
+  a.authorizer := [ org@organization('approver') ];
+  a.approval_status := s;
+  a.signoff_date := dt@date_and_time('date');
+END_DEPENDENT_MAP; -- approval
+
+DEPENDENT_MAP date_and_time
+  AS dt : erm.date_and_time;
+  FROM str : STRING;
+SELECT
+   dt.day := 1;
+   dt.year := 2002;
+   dt.month := 10;
+   dt.hour := 12;
+   dt.minute := 0;
+   dt.second := 0;
+   dt.time_zone := 5;
+   dt.time_zone_sense := erm.ahead_or_behind.ahead;
+END_DEPENDENT_MAP; -- date_and_time
+
+DEPENDENT_MAP functional_def
+  AS fuuv : erm.functional_unit_usage_view;
+  FROM str : STRING;
+SELECT
+  fuuv.creator := [ org@organization('creator') ];
+  fuuv.product_definition_id := 'pd_id';
+  fuuv.security_code := sc@security_classification('unsecure');
+  fuuv.context_description := et@ee_text('ctx desc');
+  fuuv.version := amv@am_product(EXTENT('IDF_V2.IDF_DATA')[1].library_file.library_library_header);
+  fuuv.product_definition_approval := a@approval('bogus', erm.status.approved);
+  fuuv.creation_date := dt@date_and_time('date');
+  --fuuv.documentation: OPTIONAL SET [1:?] OF ee_document;
+  --fuuv.cad_filename: OPTIONAL ee_name;
+  fuuv.discipline_id := 'disc id';
+  --fuuv.analytical_functional_unit_representation: OPTIONAL SET [1:?] OF analytical_representation;
+END_DEPENDENT_MAP; -- functional_def
+
+DEPENDENT_MAP ee_requirement_occurrence
+  AS ero : erm.ee_requirement_occurrence;
+     rd  : erm.requirement_definition;
+     es  : erm.ee_specification;
+     edi : erm.ee_document_identifier;
+  FROM name : STRING;
+SELECT
+  ero.associated_definition := rd;
+  --ero.required_analytical_representation: OPTIONAL SET [1:?] OF analytical_representation;
+  --ero.required_specification: OPTIONAL SET [1:?] OF ee_specification;
+  --ero.required_part: OPTIONAL SET [1:?] OF ee_product;
+  --ero.required_coordinated_characteristic: OPTIONAL SET [1:?] OF coordinated_characteristic;
+  ero.requirement_specification := [ es ];
+  --ero.required_characteristic: OPTIONAL SET [1:?] OF characteristic;
+  --ero.required_material: OPTIONAL ee_material;
+  --ero.description: OPTIONAL ee_text;
+  ero.name := name;
+
+  rd.creator := [ org@organization('creator') ];
+  rd.product_definition_id := 'pd_id';
+  rd.security_code := sc@security_classification('unsecure');
+  rd.context_description := et@ee_text('ctx desc');
+  rd.version := imv@im_product(EXTENT('IDF_V2.BOARD_DATA')[1].board_board_header);
+  rd.product_definition_approval := a@approval('bogus', erm.status.approved);
+  rd.creation_date := dt@date_and_time('date');
+  --rd.documentation: OPTIONAL SET [1:?] OF ee_document;
+  --rd.cad_filename: OPTIONAL ee_name;
+  rd.discipline_id := 'disc id';
+
+  es.publisher := org@organization('publisher');
+  --es.key_phrase: OPTIONAL SET [1:?] OF structured_text;
+  --es.document_approval: OPTIONAL ee_approval;
+  es.base_identifier := edi;
+  --es.change_date: OPTIONAL SET [1:?] OF date_and_time;
+  es.creation_date := dt@date_and_time('date');
+  --es.security_code: OPTIONAL security_classification;
+  --es.text_usage: OPTIONAL plain_or_structured_text;
+  --es.author: OPTIONAL SET [1:?] OF person;
+  --es.revision: OPTIONAL ee_name;
+  es.document_name := 'requirement';
+  es.source := org@organization('source');
+  --es.code_or_identifier: OPTIONAL string;
+
+  edi.identifier_name := 'requirement';
+  edi.assigned_value := 'requirement';
+END_DEPENDENT_MAP; -- ee_requirement_occurrence
+
+DEPENDENT_MAP cartesian_coordinate_system
+  AS   ccs     : erm.cartesian_coordinate_system;
+  FROM luom    : STRING;
+       lde_mv  : REAL;
+       lde_uom : STRING;
+SELECT
+  ccs.length_unit_of_measure_prefix := '';
+  ccs.length_unit_of_measure := luom;
+  --ccs.length_dynamic_range: OPTIONAL integer;
+  ccs.dimensionality := erm.two_or_three_dimensional.two_dimensional;
+  ccs.angle_unit_of_measure := erm.degree_or_radian.degree;
+  ccs.angle_unit_of_measure_prefix := '';
+--  ccs.length_uncertainty := lde@length_data_element(lde_mv, lde_uom);
+  --ccs.angular_uncertainty: OPTIONAL angle_data_element;
+END_DEPENDENT_MAP; -- cartesian_coordinate_system
+
+DEPENDENT_MAP inter_stratum_feature_template
+  AS   isft  : erm.inter_stratum_feature_template;
+  FROM lib   : STRING;
+       tname : STRING;
+SELECT
+  --isft.item_version: OPTIONAL ee_name;
+  isft.library := lib;
+  --isft.item_name: OPTIONAL ee_name;
+  isft.name := tname;
+  --isft.description: OPTIONAL label;
+  --isft.part_template_analytical_model: OPTIONAL analytical_model;
+  --isft.physical_characteristic: OPTIONAL SET [1:?] OF correlated_or_independent;
+  --isft.analytical_part_template_representation: OPTIONAL SET [1:?] OF analytical_representation;
+  isft.associated_definition := td@template_definition('isft', '1');
+  isft.of_passage_technology := pt@passage_technology('isft', FALSE);
+END_DEPENDENT_MAP; -- inter_stratum_feature_template
+
+DEPENDENT_MAP registered_style
+  AS rs : erm.registered_style;
+  FROM str : STRING;
+SELECT
+  rs.case_style_code := str;
+--  rs.registration_document := ed@ee_document('registration');
+END_DEPENDENT_MAP; -- registered_style
+
+DEPENDENT_MAP seating_plane
+  AS sp : erm.seating_plane;
+  FROM str : STRING;
+SELECT
+  sp.name := str;
+  --sp.description: OPTIONAL label;
+  --sp.non_feature_shape_element.scope: OPTIONAL SET [1:?] OF ee_product_definition_with_annotation_elements;
+END_DEPENDENT_MAP; -- seating_plane
+
+DEPENDENT_MAP orientation
+  AS   o  : erm.orientation;
+  FROM pl : idf.placement;
+SELECT
+  -- not sure how to compute the direction from the angle pl.rotation_angle
+  o.direction_ratios := [ 0. , 1. ];
+END_DEPENDENT_MAP; -- orientation
+
+DEPENDENT_MAP passage_technology
+  AS   pt     : erm.passage_technology;
+  FROM name   : STRING;
+       plated : BOOLEAN;
+SELECT
+--  pt.as_finished_inter_stratum_extent := ise@inter_stratum_extent('conductive');
+  --pt.deposition_material: OPTIONAL ee_material;
+  pt.plated_passage := plated;
+  --pt.maximum_as_finished_passage_extent: OPTIONAL length_data_element;
+  --pt.minimum_as_finished_passage_extent: OPTIONAL length_data_element;
+  pt.name := name;
+  --pt.maximum_as_finished_deposition_thickness: OPTIONAL length_data_element;
+  --pt.maximum_aspect_ratio: OPTIONAL real;
+  --pt.minimum_as_finished_deposition_thickness: OPTIONAL length_data_element;
+  --pt.specification: OPTIONAL process_specification;
+END_DEPENDENT_MAP; -- passage_technology
+
+DEPENDENT_MAP default_via_definition
+  AS   dvd    : erm.default_via_definition;
+  FROM name   : STRING;
+       plated : BOOLEAN;
+SELECT
+--  dvd.as_finished_inter_stratum_extent := ise@inter_stratum_extent('conductive');
+--  dvd.deposition_material := em@ee_material('via plating');
+  dvd.plated_passage := plated;
+  --dvd.maximum_as_finished_passage_extent: OPTIONAL length_data_element;
+  dvd.minimum_as_finished_passage_extent := lde@length_data_element(125.0, 'mil');
+  dvd.name := name;
+  --dvd.maximum_as_finished_deposition_thickness: OPTIONAL length_data_element;
+  --dvd.maximum_aspect_ratio: OPTIONAL real;
+  dvd.minimum_as_finished_deposition_thickness := lde@length_data_element(1.0, 'mil');
+  --dvd.specification: OPTIONAL process_specification;
+END_DEPENDENT_MAP; -- default_via_definition
+
+DEPENDENT_MAP default_unsupported_passage_definition
+  AS   dupd   : erm.default_unsupported_passage_definition;
+  FROM name   : STRING;
+       plated : BOOLEAN;
+SELECT
+--  dupd.as_finished_inter_stratum_extent := ise@inter_stratum_extent('conductive');
+  --dupd.deposition_material: OPTIONAL ee_material;
+  dupd.plated_passage := plated;
+  --dupd.maximum_as_finished_passage_extent: OPTIONAL length_data_element;
+  dupd.minimum_as_finished_passage_extent := lde@length_data_element(125.0, 'mil');
+  dupd.name := name;
+  --dupd.maximum_as_finished_deposition_thickness: OPTIONAL length_data_element;
+  --dupd.maximum_aspect_ratio: OPTIONAL real;
+  --dupd.minimum_as_finished_deposition_thickness: OPTIONAL length_data_element;
+  --dupd.specification: OPTIONAL process_specification;
+END_DEPENDENT_MAP; -- default_unsupported_passage_definition
+
+(*
+MAP mechanical
+  AS puuv : erm.physical_unit_usage_view;
+     epv  : erm.ee_product_version;
+     ep   : erm.ee_product;
+  FROM mech : idf.mechanical;
+ --  mech.outline           : loop;
+ --  mech.geometry_name     : STRING;
+ --  mech.part_number       : STRING;
+ --  mech.units_definition  : units_definition_enumeration;
+ --  mech.component_height  : REAL;
+SELECT
+  puuv.creator := [ org@organization('creator') ];
+  puuv.product_definition_id := 'pd_id';
+  puuv.security_code := sc@security_classification('unsecure');
+  puuv.context_description := et@ee_text('ctx desc');
+  puuv.version := epv;
+  puuv.product_definition_approval := a@approval('bogus', erm.status.approved);
+  puuv.creation_date := dt@date_and_time('date');
+  --puuv.documentation: OPTIONAL SET [1:?] OF ee_document;
+  --puuv.cad_filename: OPTIONAL ee_name;
+  puuv.discipline_id := 'disc id';
+  --puuv.analytical_physical_unit_representation: OPTIONAL SET [1:?] OF analytical_representation;
+  --puuv.unit_technology: OPTIONAL technology;
+  --puuv.physical_device_characteristic: OPTIONAL SET [1:?] OF characteristic;
+  --puuv.physical_device_coordinated_characteristic: OPTIONAL SET [1:?] OF coordinated_characteristic;
+  --puuv.design_requirement: OPTIONAL SET [1:?] OF ee_requirement_occurrence;
+
+  epv.creator := org@organization('creator');
+  --epv.authorizing_agreement: OPTIONAL contract;
+  epv.revision_code := '1';
+  epv.versioned_item := ep;
+  epv.security_code := sc@security_classification('unsecure');
+  epv.product_version_approval := a@approval('bogus', erm.status.approved);
+  epv.life_cycle_status := erm.life_cycle_stage.conceptual_design;
+  --epv.product_supplier: OPTIONAL person_organization;
+  --epv.design_supplier: OPTIONAL person_organization;
+
+  ep.description := et@ee_text('mechanical part');
+  ep.product_nomenclature := '';
+  ep.part_number := mech.part_number;
+  ep.design_owner := org@organization('designer');
+  --ep.standard_product_indicator: OPTIONAL boolean;
+END_MAP; -- mechanical
+
+DEPENDENT_MAP placement_coordinate
+  AS   cp : erm.cartesian_point;
+  FROM pl : idf.placement;
+SELECT
+  cp.coordinates := [ pl.x_coord, pl.y_coord ];
+END_DEPENDENT_MAP; -- placement_coordinate
+
+DEPENDENT_MAP ee_material
+  AS em : erm.ee_material;
+  FROM str : STRING;
+SELECT
+  em.material_name := str;
+  --em.electrical_conductivity_classification: OPTIONAL material_conductivity_classification;
+  --em.optical_conductivity_classification: OPTIONAL material_conductivity_classification;
+  em.registration_document := ed@ee_document('material reg');
+  --em.thermal_conductivity_classification: OPTIONAL material_conductivity_classification;
+END_DEPENDENT_MAP; -- ee_material
+
+DEPENDENT_MAP ee_document
+  AS ed  : erm.ee_document;
+     edi : erm.ee_document_identifier;
+  FROM str : STRING;
+SELECT
+  ed.publisher := org@organization('publisher');
+  --ed.key_phrase: OPTIONAL SET [1:?] OF structured_text;
+  --ed.document_approval: OPTIONAL ee_approval;
+  ed.base_identifier := edi;
+  --ed.change_date: OPTIONAL SET [1:?] OF date_and_time;
+  ed.creation_date := dt@date_and_time('date');
+  --ed.security_code: OPTIONAL security_classification;
+  --ed.text_usage: OPTIONAL plain_or_structured_text;
+  --ed.author: OPTIONAL SET [1:?] OF person;
+  --ed.revision: OPTIONAL ee_name;
+  ed.document_name := str;
+
+  edi.identifier_name := str;
+  edi.assigned_value  := str;
+END_DEPENDENT_MAP; -- ee_document
+
+DEPENDENT_MAP inter_stratum_extent
+  AS ise : erm.inter_stratum_extent;
+  FROM stype : STRING;
+SELECT
+  ise.from_stratum := strat@stratum('top', stype);
+  ise.to_stratum   := strat@stratum('bottom', stype);
+END_DEPENDENT_MAP; -- inter_stratum_extent
+
+DEPENDENT_MAP stratum
+  AS   strat  : erm.stratum;
+  FROM sname  : STRING;
+       stname : STRING;
+SELECT
+  strat.creator := [ org@organization('creator') ];
+  strat.product_definition_id := 'pd_id';
+  strat.security_code := sc@security_classification('unsecure');
+  strat.context_description := et@ee_text('ctx desc');
+  strat.version := imv@board_data(EXTENT('IDF_V2.BOARD_DATA')[1]);
+  strat.product_definition_approval := a@approval('bogus', erm.status.approved);
+  strat.creation_date := dt@date_and_time('date');
+  --strat.documentation: OPTIONAL SET [1:?] OF ee_document;
+  --strat.cad_filename: OPTIONAL ee_name;
+  strat.discipline_id := 'disc id';
+  strat.name := sname;
+  --strat.stratum_usage: OPTIONAL external_definition;
+  strat.of_technology := st@stratum_technology(stname);
+END_DEPENDENT_MAP; -- stratum
+
+DEPENDENT_MAP stratum_technology
+  AS   st     : erm.stratum_technology;
+  FROM stname : STRING;
+SELECT
+  st.stratum_material := em@ee_material('strat mat');
+  st.maximum_stratum_thickness := lde@length_data_element(1.0, 'mil');
+  st.minimum_stratum_thickness := lde@length_data_element(1.0, 'mil');
+  st.name := stname;
+  --st.minimum_finished_feature_size: OPTIONAL length_data_element;
+  --st.laminate_stiffness_class: OPTIONAL stiffness_class;
+  --st.minimum_finished_feature_spacing: OPTIONAL length_data_element;
+  --st.maximum_feature_size_requirement: OPTIONAL length_data_element;
+  --st.specification: OPTIONAL process_specification;
+END_DEPENDENT_MAP; -- stratum_technology
+*)
+END_SCHEMA_MAP; -- idf_to_ap210ext
