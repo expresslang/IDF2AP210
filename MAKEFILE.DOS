@@ -1,0 +1,219 @@
+# Id: Makefile,v 1.11 1999/02/17 18:08:16 cline Exp $
+# Auth: Kevin Cline
+#
+# Makefile for EXPRESS-X.
+# 	
+RCSTELL = @pwd;/dogbert5/ap210_release/bin/rcstell
+
+!include $(ROSE_CONFIG)
+
+EXEC		= idf2arm.exe
+
+DATASCHEMAS = electronic_assembly_interconnect_and_packaging_design.rose \
+			ap210dis_299_40.rose idf_v2.rose \
+			electronic_assembly_interconnect_and_packaging_design_EXPX.rose \
+			ap210dis_299_40_EXPX.rose idf_v2_EXPX.rose
+
+# Set these to rcs tools
+CO              = co
+COFLAGS         = 
+
+# Set these to the compiler flags and directives for all packages.
+# These are used by the CXX_COMPILE and CX_LINK C++ compile and link
+# macros.  Link against the EXPRESS-X and ROSE libraries.
+#
+CXX_CFLAGS      = -I$(ROSE_INCLUDE) -I$(ROSE_INCLUDE)\expx -I$(ROSE_INCLUDE)\expx\classes
+CXX_LDFLAGS 	= 
+LIB_DIR		= $(ROSE_LIB)
+LIBRARIES 	= $(ROSE_LIB)\expx.lib $(ROSE_LIB)\rose.lib $(CXX_SYSLIBS)
+
+# These object files are built using the default .cxx to .obj rules
+# defined in the $ROSE_CONFIG file
+#
+OBJECTS		= helpers$o idf2arm$o PopulateBaseCircle$o
+SRCS            = helpers.cxx idf2arm.cxx PopulateBaseCircle.cxx
+
+IDF2ARM		= idf2arm.exp \
+                idf2arm/board_header.exp \
+                idf2arm/board_outline.exp \
+                idf2arm/drilled_holes.exp \
+                idf2arm/electrical.exp \
+                idf2arm/mechanical.exp \
+                idf2arm/other_outline.exp \
+				idf2arm/place_keepout.exp \
+				idf2arm/place_outline.exp \
+				idf2arm/place_region.exp \
+				idf2arm/placement.exp \
+				idf2arm/route_keepout.exp \
+				idf2arm/route_outline.exp \
+				idf2arm/via_keepout.exp
+
+ARM2AIM		= arm2aim.exp \
+                arm2aim/assembly_component.exp \
+                arm2aim/assembly_component_2d_shape.exp \
+                arm2aim/axis_placement_2d.exp \
+                arm2aim/cartesian_coordinate_system.exp \
+                arm2aim/cartesian_point.exp \
+                arm2aim/cartesian_transformation_operator_2d.exp \
+                arm2aim/component_2d_location.exp \
+                arm2aim/component_assembly_2d_position.exp \
+                arm2aim/component_feature.exp \
+				arm2aim/component_part_2d_geom_rep_relationship.exp \
+				arm2aim/component_placement_restriction_assignment.exp \
+				arm2aim/cutout.exp \
+                arm2aim/date_and_time.exp \
+				arm2aim/datum_based_length_measure.exp \
+				arm2aim/datum_plane.exp \
+				arm2aim/datum_point.exp \
+		arm2aim/design_requirement_occurrence.exp \
+                arm2aim/ee_document.exp \
+                arm2aim/ee_product.exp \
+                arm2aim/ee_product_definition.exp \
+                arm2aim/ee_product_version.exp \
+				arm2aim/feature_shape_definition.exp \
+				arm2aim/feature_shape_occurrence.exp \
+				arm2aim/geometrically_bounded_2d_wireframe.exp \
+				arm2aim/inter_stratum_extent.exp \
+                arm2aim/inter_stratum_feature.exp \
+                arm2aim/inter_stratum_feature_template.exp \
+				arm2aim/interconnect_module_component.exp \
+				arm2aim/i_m_component_surface_feature.exp \
+				arm2aim/i_m_constraint_region.exp \
+				arm2aim/interconnect_module_edge.exp \
+				arm2aim/i_m_primary_surface.exp \
+				arm2aim/i_m_secondary_surface.exp \
+				arm2aim/i_m_stratum_assembly_relationship.exp \
+                arm2aim/interfacial_connection.exp \
+				arm2aim/item_restricted_requirement_occurrence.exp \
+				arm2aim/laminate_component.exp \
+                arm2aim/length_data_element.exp \
+				arm2aim/library_ee_p_d_package.exp \
+                arm2aim/library_ee_p_d_packaged_part.exp \
+				arm2aim/library_ee_p_d_physical_unit_usage_view.exp \
+				arm2aim/located_i_m_thickness_requirement.exp \
+				arm2aim/mounting_restriction_area.exp \
+                arm2aim/next_higher_assembly_relationship.exp \
+                arm2aim/orientation.exp \
+                arm2aim/organization.exp \
+				arm2aim/packaged_component.exp \
+                arm2aim/part_feature.exp \
+                arm2aim/part_template.exp \
+                arm2aim/part_template_planar_shape.exp \
+                arm2aim/passage_technology.exp \
+                arm2aim/physical_unit_design_view.exp \
+                arm2aim/physical_unit_planar_shape.exp \
+                arm2aim/physical_unit_usage_view.exp \
+                arm2aim/registered_style.exp \
+				arm2aim/stratum.exp \
+				arm2aim/stratum_i_m_planar_position.exp \
+				arm2aim/stratum_planar_shape.exp \
+				arm2aim/stratum_technology.exp \
+                arm2aim/stuff.exp \
+                arm2aim/unsupported_passage.exp \
+				idf2aim/loop.exp 
+
+# a list of all the files created in this directory
+DERIVED = $(EXEC) $(DATASCHEMAS) $(OBJECTS) \
+ap210dis_299_40.rose \
+electronic_assembly_interconnect_and_packaging_design_PARSE_DATA.rose \
+idf_v2_to_ap210dis_299_40_EXPX.rose \
+ap210dis_299_40_to_aim_EXPX.rose
+
+# The Manifest is all the source files for this project.
+MANIFEST = Makefile $(SRCS) $(IDF2ARM) $(ARM2AIM) \
+aim.ws electronic_assembly_interconnect_and_packaging_design.exp \
+arm.ws ap210dis_299_40.exp \
+idf_v2.exp
+
+#========================================
+# Standard Symbolic Targets
+#
+all: $(DATASCHEMAS) idf_v2_to_ap210dis_299_40_EXPX.rose ap210dis_299_40_to_aim_EXPX.rose $(EXEC)
+
+aim210.stp: $(EXEC) $(DATASCHEMAS) idf_v2_to_ap210dis_299_40_EXPX.rose ap210dis_299_40_to_aim_EXPX.rose
+	touch arm210.stp
+	rm arm210.stp
+	touch aim210.stp
+	rm aim210.stp
+	$(EXEC) mech.stp idf_v2_to_ap210dis_299_40_EXPX ap210dis_299_40_to_aim_EXPX
+
+electronic_assembly_interconnect_and_packaging_design.rose: aim.ws electronic_assembly_interconnect_and_packaging_design.exp
+	expfront -rose -ws aim.ws electronic_assembly_interconnect_and_packaging_design.exp
+
+electronic_assembly_interconnect_and_packaging_design_EXPX.rose: electronic_assembly_interconnect_and_packaging_design.exp
+	expxfront electronic_assembly_interconnect_and_packaging_design.exp
+#	expfront -rose -ws aim.ws electronic_assembly_interconnect_and_packaging_design.exp
+
+ap210dis_299_40.rose: arm.ws ap210dis_299_40.exp
+	expfront -rose -ws arm.ws ap210dis_299_40.exp
+
+ap210dis_299_40_EXPX.rose: arm.ws ap210dis_299_40.exp
+	expxfront ap210dis_299_40.exp
+#	expfront -rose -ws arm.ws -validate ap210dis_299_40.exp
+
+idf_v2.rose: idf_v2.exp
+	expfront -rose idf_v2.exp
+
+idf_v2_EXPX.rose: idf_v2.exp
+	expxfront idf_v2.exp
+#	expfront -rose -validate idf_v2.exp
+
+idf2armsrc:; cd idf2arm; make
+
+idf_v2_to_ap210dis_299_40_EXPX.rose: $(IDF2ARM)
+	expxfront -level 3++ -validate idf2arm.exp
+
+arm2aimsrc:; cd arm2aim; make
+
+ap210dis_299_40_to_aim_EXPX.rose: $(ARM2AIM)
+	expxfront -level 3++ -validate arm2aim.exp
+
+# $(MANIFEST): $${@D}/RCS/$${@F},v
+# 		$(CO) $(COFLAGS) $@
+
+default: $(EXEC)
+
+install: $(EXEC)
+
+tar: $(MANIFEST)
+	rm in_process.tar
+	tar -cvf in_process.tar $(MANIFEST)
+
+save:
+	cp arm210.stp arm210.stp.save
+	cp aim210.stp aim210.stp.save
+
+clean: 
+	- $(RM) *.obj
+	- $(RM) *.exe
+
+rcstell:;	$(RCSTELL)
+	@cd idf2aim; make rcstell
+	@cd idf2arm; make rcstell
+	@cd arm2aim; make rcstell
+
+rcsclean:; rcsclean
+	@cd idf2arm; make rcsclean
+	@cd arm2aim; make rcsclean
+
+clobber:; rcsclean
+	-@rm $(DERIVED)
+	@cd idf2arm; make clobber 
+	@cd arm2aim; make clobber
+
+very-clean:	clean
+spotless:	very-clean
+
+run: $(EXEC) idf_v2_to_ap210dis_299_40_EXPX.rose ap210dis_299_40_to_aim_EXPX.rose
+	erase arm210.stp
+#	rm arm210.stp
+	erase aim210.stp
+#	rm aim210.stp
+	$(EXEC) mech.stp idf_v2_to_ap210dis_299_40_EXPX ap210dis_299_40_to_aim_EXPX
+
+#========================================
+# Executables and other targets
+#
+$(EXEC): $(SRCS) $(OBJECTS)
+	$(CXX_LINK) /out:$@ $(OBJECTS) $(LIBRARIES)
+
